@@ -141,7 +141,9 @@
 3. Убедитесь, что PostgreSQL запущен и база существует.
 4. Примените миграции:
    - `composer migrate`
-5. Запустите API:
+5. Создайте суперпользователя:
+   - `composer superadmin:create`
+6. Запустите API:
    - `composer serve`
 
 Проверка:
@@ -155,6 +157,7 @@
 - `backend/src/Http/Controller/NoteController.php` - базовый CRUD заметок.
 - `backend/phinx.php` - конфигурация Phinx.
 - `backend/database/migrations` - миграции БД.
+- `backend/bin/console` - CLI-команды проекта (в т.ч. `create:superadmin`).
 
 ## Текущее состояние
 

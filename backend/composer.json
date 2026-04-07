@@ -18,6 +18,7 @@
         "serve": "php -S localhost:8080 -t public public/index.php",
         "migrate": "vendor/bin/phinx migrate -e development",
         "rollback": "vendor/bin/phinx rollback -e development",
-        "migrate:status": "vendor/bin/phinx status -e development"
+        "migrate:status": "vendor/bin/phinx status -e development",
+        "superadmin:create": "php bin/console create:superadmin"
     }
 }

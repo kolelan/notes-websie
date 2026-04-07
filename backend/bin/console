@@ -1,0 +1,57 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Database\PdoFactory;
+
+require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../src/Config/bootstrap.php';
+
+$command = $argv[1] ?? null;
+
+if ($command !== 'create:superadmin') {
+    fwrite(STDERR, "Unknown command. Available commands:\n");
+    fwrite(STDERR, "  create:superadmin\n");
+    exit(1);
+}
+
+$email = trim((string)(getenv('SUPERADMIN_EMAIL') ?: ''));
+$name = trim((string)(getenv('SUPERADMIN_NAME') ?: 'Super Admin'));
+$password = (string)(getenv('SUPERADMIN_PASSWORD') ?: '');
+
+if ($email === '' || $password === '') {
+    fwrite(STDERR, "SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD must be set in .env\n");
+    exit(1);
+}
+
+$passwordHash = password_hash($password, PASSWORD_BCRYPT);
+if ($passwordHash === false) {
+    fwrite(STDERR, "Failed to hash superadmin password.\n");
+    exit(1);
+}
+
+$pdo = PdoFactory::createFromEnv();
+
+$sql = <<<SQL
+INSERT INTO "user" (email, name, password_hash, role)
+VALUES (:email, :name, :password_hash, 'superadmin')
+ON CONFLICT (email)
+DO UPDATE SET
+    name = EXCLUDED.name,
+    password_hash = EXCLUDED.password_hash,
+    role = 'superadmin'
+RETURNING id, email, role;
+SQL;
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute([
+    'email' => $email,
+    'name' => $name,
+    'password_hash' => $passwordHash,
+]);
+
+$user = $stmt->fetch();
+
+fwrite(STDOUT, "Superadmin ready: {$user['email']} ({$user['role']})\n");
+exit(0);
