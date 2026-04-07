@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 DC := docker compose
 
-.PHONY: help init up down restart build ps logs logs-php logs-nginx logs-db install migrate rollback status superadmin shell-php shell-db clean
+.PHONY: help init wait-db up down restart build ps logs logs-php logs-nginx logs-db install migrate rollback status superadmin shell-php shell-db clean
 
 help:
 	@echo "Доступные команды:"
@@ -27,10 +27,21 @@ help:
 
 init:
 	@if [ ! -f backend/.env ]; then cp backend/.env.example backend/.env; fi
+	@if grep -q '^DB_HOST=' backend/.env; then \
+		sed -i 's/^DB_HOST=.*/DB_HOST=db/' backend/.env; \
+	else \
+		echo 'DB_HOST=db' >> backend/.env; \
+	fi
 	$(DC) up -d --build
+	$(MAKE) wait-db
 	$(DC) exec php composer install
 	$(DC) exec php composer migrate
 	$(DC) exec php composer superadmin:create
+
+wait-db:
+	@echo "Ожидание готовности Postgres..."
+	@until $(DC) exec -T db pg_isready -U postgres -d notes_website >/dev/null 2>&1; do sleep 1; done
+	@echo "Postgres готов."
 
 up:
 	$(DC) up -d --build
@@ -62,6 +73,7 @@ install:
 	$(DC) exec php composer install
 
 migrate:
+	$(MAKE) wait-db
 	$(DC) exec php composer migrate
 
 rollback:
