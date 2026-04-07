@@ -1,0 +1,23 @@
+{
+    "name": "notes-website/backend",
+    "description": "Backend API for notes website",
+    "type": "project",
+    "require": {
+        "php": "^8.2",
+        "slim/slim": "^4.14",
+        "slim/psr7": "^1.7",
+        "vlucas/phpdotenv": "^5.6",
+        "robmorgan/phinx": "^0.16"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "scripts": {
+        "serve": "php -S localhost:8080 -t public public/index.php",
+        "migrate": "vendor/bin/phinx migrate -e development",
+        "rollback": "vendor/bin/phinx rollback -e development",
+        "migrate:status": "vendor/bin/phinx status -e development"
+    }
+}

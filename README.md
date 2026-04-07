@@ -132,9 +132,37 @@
 9. Передача владения.
 10. Усиление WAF и аудит.
 
+## Быстрый старт (backend)
+
+1. Перейдите в `backend` и установите зависимости:
+   - `composer install`
+2. Создайте `.env`:
+   - скопируйте `backend/.env.example` в `backend/.env`
+3. Убедитесь, что PostgreSQL запущен и база существует.
+4. Примените миграции:
+   - `composer migrate`
+5. Запустите API:
+   - `composer serve`
+
+Проверка:
+- `GET http://localhost:8080/health`
+- `GET http://localhost:8080/notes`
+
+## Структура проекта (текущий инкремент)
+
+- `backend/public/index.php` - точка входа Slim.
+- `backend/src/Database/PdoFactory.php` - создание PDO-подключения к PostgreSQL.
+- `backend/src/Http/Controller/NoteController.php` - базовый CRUD заметок.
+- `backend/phinx.php` - конфигурация Phinx.
+- `backend/database/migrations` - миграции БД.
+
 ## Текущее состояние
 
-Сейчас репозиторий содержит спецификацию и постановку задачи. Реализация backend/frontend находится в стадии подготовки.
+Собран первый технический инкремент backend:
+- добавлен каркас Slim API;
+- подключен инструмент миграций `Phinx`;
+- создана начальная миграция PostgreSQL по ключевым сущностям;
+- реализованы базовые endpoint-ы `health` и `notes CRUD`.
 
 ## Лицензия
 
