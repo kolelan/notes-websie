@@ -40,6 +40,8 @@ $app->group('', function ($group) use ($noteController, $groupController): void 
     $group->post('/notes', [$noteController, 'create']);
     $group->put('/notes/{id}', [$noteController, 'update']);
     $group->delete('/notes/{id}', [$noteController, 'delete']);
+    $group->post('/notes/{id}/attach-to-group', [$noteController, 'attachToGroup']);
+    $group->post('/notes/{id}/copy-to-group', [$noteController, 'copyToGroup']);
 
     $group->get('/groups', [$groupController, 'list']);
     $group->get('/groups/{id}', [$groupController, 'show']);

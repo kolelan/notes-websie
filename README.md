@@ -96,8 +96,8 @@
 - `GET /notes/{id}`
 - `PUT /notes/{id}`
 - `DELETE /notes/{id}`
-- `POST /notes/{id}/attach-to-group`
-- `POST /notes/{id}/copy-to-group`
+- `POST /notes/{id}/attach-to-group` (`group_id` в body)
+- `POST /notes/{id}/copy-to-group` (`group_id` в body, создает новую заметку-копию)
 
 ### Permissions
 - `GET /permissions/target/{type}/{id}`

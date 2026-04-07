@@ -139,4 +139,124 @@ final class NoteController
 
         return $response->withStatus(204);
     }
+
+    public function attachToGroup(Request $request, Response $response, array $args): Response
+    {
+        $ownerId = (string)$request->getAttribute('user_id', '');
+        $noteId = (string)($args['id'] ?? '');
+        $payload = (array)$request->getParsedBody();
+        $groupId = trim((string)($payload['group_id'] ?? ''));
+
+        if ($groupId === '') {
+            return $this->json($response, ['error' => 'Field group_id is required'], 422);
+        }
+
+        if (!$this->noteExistsForOwner($noteId, $ownerId)) {
+            return $this->json($response, ['error' => 'Note not found'], 404);
+        }
+
+        if (!$this->groupExistsForOwner($groupId, $ownerId)) {
+            return $this->json($response, ['error' => 'Group not found'], 404);
+        }
+
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO note_group (note_id, group_id, is_copy)
+             VALUES (:note_id, :group_id, FALSE)
+             ON CONFLICT (note_id, group_id) DO NOTHING'
+        );
+        $stmt->execute([
+            'note_id' => $noteId,
+            'group_id' => $groupId,
+        ]);
+
+        return $this->json($response, ['data' => ['note_id' => $noteId, 'group_id' => $groupId, 'is_copy' => false]]);
+    }
+
+    public function copyToGroup(Request $request, Response $response, array $args): Response
+    {
+        $ownerId = (string)$request->getAttribute('user_id', '');
+        $sourceNoteId = (string)($args['id'] ?? '');
+        $payload = (array)$request->getParsedBody();
+        $groupId = trim((string)($payload['group_id'] ?? ''));
+
+        if ($groupId === '') {
+            return $this->json($response, ['error' => 'Field group_id is required'], 422);
+        }
+
+        if (!$this->groupExistsForOwner($groupId, $ownerId)) {
+            return $this->json($response, ['error' => 'Group not found'], 404);
+        }
+
+        $sourceStmt = $this->pdo->prepare(
+            'SELECT title, description, content, image_preview_url
+             FROM note
+             WHERE id = :id AND owner_id = :owner_id
+             LIMIT 1'
+        );
+        $sourceStmt->execute([
+            'id' => $sourceNoteId,
+            'owner_id' => $ownerId,
+        ]);
+        $source = $sourceStmt->fetch();
+
+        if ($source === false) {
+            return $this->json($response, ['error' => 'Source note not found'], 404);
+        }
+
+        $createStmt = $this->pdo->prepare(
+            'INSERT INTO note (title, description, content, image_preview_url, owner_id)
+             VALUES (:title, :description, :content, :image_preview_url, :owner_id)
+             RETURNING id'
+        );
+        $createStmt->execute([
+            'title' => $source['title'],
+            'description' => $source['description'],
+            'content' => $source['content'],
+            'image_preview_url' => $source['image_preview_url'],
+            'owner_id' => $ownerId,
+        ]);
+        $newNoteId = (string)$createStmt->fetchColumn();
+
+        $attachStmt = $this->pdo->prepare(
+            'INSERT INTO note_group (note_id, group_id, is_copy)
+             VALUES (:note_id, :group_id, TRUE)'
+        );
+        $attachStmt->execute([
+            'note_id' => $newNoteId,
+            'group_id' => $groupId,
+        ]);
+
+        return $this->json($response, ['data' => [
+            'source_note_id' => $sourceNoteId,
+            'new_note_id' => $newNoteId,
+            'group_id' => $groupId,
+            'is_copy' => true,
+        ]], 201);
+    }
+
+    private function noteExistsForOwner(string $noteId, string $ownerId): bool
+    {
+        $stmt = $this->pdo->prepare('SELECT 1 FROM note WHERE id = :id AND owner_id = :owner_id LIMIT 1');
+        $stmt->execute([
+            'id' => $noteId,
+            'owner_id' => $ownerId,
+        ]);
+        return $stmt->fetchColumn() !== false;
+    }
+
+    private function groupExistsForOwner(string $groupId, string $ownerId): bool
+    {
+        $stmt = $this->pdo->prepare('SELECT 1 FROM "group" WHERE id = :id AND owner_id = :owner_id LIMIT 1');
+        $stmt->execute([
+            'id' => $groupId,
+            'owner_id' => $ownerId,
+        ]);
+        return $stmt->fetchColumn() !== false;
+    }
+
+    private function json(Response $response, array $payload, int $status = 200): Response
+    {
+        $response->getBody()->write((string)json_encode($payload, JSON_UNESCAPED_UNICODE));
+        return $response->withStatus($status)->withHeader('Content-Type', 'application/json');
+    }
 }
