@@ -77,10 +77,9 @@
 ## Основные API-эндпоинты (черновой набор)
 
 ### Auth
-- `POST /auth/login`
-- `GET /auth/callback/{provider}`
-- `POST /auth/refresh`
-- `POST /auth/logout`
+- `POST /auth/login` (email/password, выдает access/refresh)
+- `POST /auth/refresh` (обновление пары токенов)
+- `POST /auth/logout` (отзыв refresh token)
 
 ### Groups
 - `GET /groups`
@@ -177,8 +176,11 @@
 ## Структура проекта (текущий инкремент)
 
 - `backend/public/index.php` - точка входа Slim.
+- `backend/src/Auth/JwtService.php` - выпуск и проверка JWT.
 - `backend/src/Database/PdoFactory.php` - создание PDO-подключения к PostgreSQL.
+- `backend/src/Http/Controller/AuthController.php` - auth endpoints.
 - `backend/src/Http/Controller/NoteController.php` - базовый CRUD заметок.
+- `backend/src/Http/Middleware/AuthMiddleware.php` - защита приватных маршрутов.
 - `backend/phinx.php` - конфигурация Phinx.
 - `backend/database/migrations` - миграции БД.
 - `backend/bin/console` - CLI-команды проекта (в т.ч. `create:superadmin`).
@@ -205,7 +207,8 @@
 - добавлен каркас Slim API;
 - подключен инструмент миграций `Phinx`;
 - создана начальная миграция PostgreSQL по ключевым сущностям;
-- реализованы базовые endpoint-ы `health` и `notes CRUD`.
+- добавлен auth-базис: `login/refresh/logout`, JWT и таблица `refresh_token`;
+- `notes` маршруты защищены bearer access token.
 
 ## Лицензия
 

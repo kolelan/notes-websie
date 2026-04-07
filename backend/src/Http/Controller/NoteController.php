@@ -46,10 +46,10 @@ final class NoteController
         $title = trim((string)($payload['title'] ?? ''));
         $description = trim((string)($payload['description'] ?? ''));
         $content = trim((string)($payload['content'] ?? ''));
-        $ownerId = (string)($payload['owner_id'] ?? '');
+        $ownerId = (string)$request->getAttribute('user_id', '');
 
         if ($title === '' || $ownerId === '') {
-            $response->getBody()->write((string)json_encode(['error' => 'Fields title and owner_id are required'], JSON_UNESCAPED_UNICODE));
+            $response->getBody()->write((string)json_encode(['error' => 'Authenticated user and title are required'], JSON_UNESCAPED_UNICODE));
             return $response->withStatus(422)->withHeader('Content-Type', 'application/json');
         }
 
