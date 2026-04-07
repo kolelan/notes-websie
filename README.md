@@ -150,6 +150,30 @@
 - `GET http://localhost:8080/health`
 - `GET http://localhost:8080/notes`
 
+## Локальная разработка через Docker
+
+1. Создайте `backend/.env` из `backend/.env.example`.
+2. Для контейнеров выставьте в `backend/.env`:
+   - `DB_HOST=db`
+3. Запустите контейнеры:
+   - `docker compose up -d --build`
+4. Установите зависимости внутри PHP-контейнера:
+   - `docker compose exec php composer install`
+5. Примените миграции:
+   - `docker compose exec php composer migrate`
+6. Создайте superadmin:
+   - `docker compose exec php composer superadmin:create`
+
+Проверка:
+- `GET http://localhost:8080/health`
+
+Можно использовать `Makefile`:
+- `make init` (первый запуск: подготовка `.env`, сборка, миграции, superadmin)
+- `make up`
+- `make install`
+- `make migrate`
+- `make superadmin`
+
 ## Структура проекта (текущий инкремент)
 
 - `backend/public/index.php` - точка входа Slim.
@@ -158,6 +182,22 @@
 - `backend/phinx.php` - конфигурация Phinx.
 - `backend/database/migrations` - миграции БД.
 - `backend/bin/console` - CLI-команды проекта (в т.ч. `create:superadmin`).
+- `docker-compose.yml` - локальный стек `nginx + php-fpm + postgres`.
+- `scripts/deploy.sh` и `scripts/deploy.ps1` - MVP-скрипты деплоя на сервер по SSH.
+
+## Production (MVP)
+
+- На сервере: `nginx + php-fpm + postgres`.
+- Публичный путь: `/var/www/site-name.ru/web`.
+- Деплой скриптом:
+  - Bash: `./scripts/deploy.sh <host> <user> [port]`
+  - PowerShell: `.\scripts\deploy.ps1 -SshHost <host> -SshUser <user> -SshPort 22`
+- В рамках деплоя выполняются:
+  - `composer install --no-dev --optimize-autoloader`;
+  - `phinx migrate -e production`;
+  - `create:superadmin`.
+
+Дополнительно по миграциям: см. `README-phinx.md`.
 
 ## Текущее состояние
 
