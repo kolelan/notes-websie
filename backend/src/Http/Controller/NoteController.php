@@ -16,7 +16,20 @@ final class NoteController
 
     public function list(Request $request, Response $response): Response
     {
-        $stmt = $this->pdo->query('SELECT id, title, description, content, owner_id, created_at, updated_at FROM note ORDER BY created_at DESC');
+        $ownerId = (string)$request->getAttribute('user_id', '');
+        $groupId = trim((string)($request->getQueryParams()['group_id'] ?? ''));
+        $params = ['owner_id' => $ownerId];
+
+        $sql = 'SELECT DISTINCT n.id, n.title, n.description, n.content, n.owner_id, n.created_at, n.updated_at
+                FROM note n';
+        if ($groupId !== '') {
+            $sql .= ' INNER JOIN note_group ng ON ng.note_id = n.id AND ng.group_id = :group_id';
+            $params['group_id'] = $groupId;
+        }
+        $sql .= ' WHERE n.owner_id = :owner_id ORDER BY n.created_at DESC';
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
         $notes = $stmt->fetchAll();
 
         $response->getBody()->write((string)json_encode(['data' => $notes], JSON_UNESCAPED_UNICODE));
@@ -26,8 +39,14 @@ final class NoteController
 
     public function show(Request $request, Response $response, array $args): Response
     {
-        $stmt = $this->pdo->prepare('SELECT id, title, description, content, owner_id, created_at, updated_at FROM note WHERE id = :id');
-        $stmt->execute(['id' => $args['id'] ?? '']);
+        $stmt = $this->pdo->prepare(
+            'SELECT id, title, description, content, owner_id, created_at, updated_at
+             FROM note WHERE id = :id AND owner_id = :owner_id'
+        );
+        $stmt->execute([
+            'id' => $args['id'] ?? '',
+            'owner_id' => (string)$request->getAttribute('user_id', ''),
+        ]);
         $note = $stmt->fetch();
 
         if ($note === false) {
@@ -85,10 +104,11 @@ final class NoteController
         $stmt = $this->pdo->prepare(
             'UPDATE note
              SET title = :title, description = :description, content = :content, updated_at = NOW()
-             WHERE id = :id'
+             WHERE id = :id AND owner_id = :owner_id'
         );
         $stmt->execute([
             'id' => $noteId,
+            'owner_id' => (string)$request->getAttribute('user_id', ''),
             'title' => $title,
             'description' => $description,
             'content' => $content,
@@ -106,8 +126,11 @@ final class NoteController
 
     public function delete(Request $request, Response $response, array $args): Response
     {
-        $stmt = $this->pdo->prepare('DELETE FROM note WHERE id = :id');
-        $stmt->execute(['id' => $args['id'] ?? '']);
+        $stmt = $this->pdo->prepare('DELETE FROM note WHERE id = :id AND owner_id = :owner_id');
+        $stmt->execute([
+            'id' => $args['id'] ?? '',
+            'owner_id' => (string)$request->getAttribute('user_id', ''),
+        ]);
 
         if ($stmt->rowCount() === 0) {
             $response->getBody()->write((string)json_encode(['error' => 'Note not found'], JSON_UNESCAPED_UNICODE));

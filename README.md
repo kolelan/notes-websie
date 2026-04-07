@@ -87,11 +87,11 @@
 - `GET /groups/{id}`
 - `PUT /groups/{id}`
 - `DELETE /groups/{id}`
-- `POST /groups/{id}/invite`
-- `POST /groups/{id}/accept-invite`
+- `POST /groups/{id}/invite` (planned)
+- `POST /groups/{id}/accept-invite` (planned)
 
 ### Notes
-- `GET /notes?group_id=&tag_id=`
+- `GET /notes?group_id=&tag_id=` (`group_id` уже поддержан)
 - `POST /notes`
 - `GET /notes/{id}`
 - `PUT /notes/{id}`
@@ -179,6 +179,7 @@
 - `backend/src/Auth/JwtService.php` - выпуск и проверка JWT.
 - `backend/src/Database/PdoFactory.php` - создание PDO-подключения к PostgreSQL.
 - `backend/src/Http/Controller/AuthController.php` - auth endpoints.
+- `backend/src/Http/Controller/GroupController.php` - CRUD групп и дерево.
 - `backend/src/Http/Controller/NoteController.php` - базовый CRUD заметок.
 - `backend/src/Http/Middleware/AuthMiddleware.php` - защита приватных маршрутов.
 - `backend/phinx.php` - конфигурация Phinx.
@@ -208,7 +209,8 @@
 - подключен инструмент миграций `Phinx`;
 - создана начальная миграция PostgreSQL по ключевым сущностям;
 - добавлен auth-базис: `login/refresh/logout`, JWT и таблица `refresh_token`;
-- `notes` маршруты защищены bearer access token.
+- `notes` маршруты защищены bearer access token;
+- добавлен `groups CRUD` с иерархией через `parent_id` и защитой от циклов.
 
 ## Лицензия
 
