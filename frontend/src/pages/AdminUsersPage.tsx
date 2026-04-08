@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, setAuthToken } from '../lib/api'
 import { readSession } from '../lib/auth'
+import { useActionStatus } from '../hooks/useActionStatus'
 
 type AdminUser = {
   id: string
@@ -33,17 +34,18 @@ export default function AdminUsersPage() {
   const [total, setTotal] = useState(0)
   const [pages, setPages] = useState(1)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [savingAction, setSavingAction] = useState('')
+  const { error, message, clear, fail, ok } = useActionStatus()
 
   async function loadUsers(targetPage = page) {
     const session = readSession()
     if (!session) {
-      navigate('/')
+      navigate('/login')
       return
     }
     setAuthToken(session.accessToken)
     setLoading(true)
-    setError('')
+    clear()
     try {
       const params: Record<string, string | boolean> = {}
       if (q.trim()) params.q = q.trim()
@@ -57,7 +59,7 @@ export default function AdminUsersPage() {
       setPages(res.data.meta?.pages ?? 1)
       setTotal(res.data.meta?.total ?? res.data.data.length)
     } catch {
-      setError('Не удалось загрузить пользователей.')
+      fail('Не удалось загрузить пользователей.')
     } finally {
       setLoading(false)
     }
@@ -70,19 +72,46 @@ export default function AdminUsersPage() {
 
   async function changeRole(userId: string, role: AdminUser['role']) {
     if (!window.confirm('Подтвердите изменение роли пользователя.')) return
-    await api.patch(`/admin/users/${userId}`, { role })
-    await loadUsers()
+    setSavingAction(`role:${userId}`)
+    clear()
+    try {
+      await api.patch(`/admin/users/${userId}`, { role })
+      ok('Роль пользователя обновлена')
+      await loadUsers()
+    } catch {
+      fail('Не удалось обновить роль пользователя.')
+    } finally {
+      setSavingAction('')
+    }
   }
 
   async function toggleActive(userId: string, isActive: boolean) {
     if (!window.confirm(isActive ? 'Заблокировать пользователя?' : 'Разблокировать пользователя?')) return
-    await api.patch(`/admin/users/${userId}`, { is_active: !isActive })
-    await loadUsers()
+    setSavingAction(`active:${userId}`)
+    clear()
+    try {
+      await api.patch(`/admin/users/${userId}`, { is_active: !isActive })
+      ok(isActive ? 'Пользователь заблокирован' : 'Пользователь разблокирован')
+      await loadUsers()
+    } catch {
+      fail('Не удалось изменить статус пользователя.')
+    } finally {
+      setSavingAction('')
+    }
   }
 
   async function logoutAll(userId: string) {
     if (!window.confirm('Принудительно завершить все сессии пользователя?')) return
-    await api.post(`/admin/users/${userId}/logout-all`)
+    setSavingAction(`logout:${userId}`)
+    clear()
+    try {
+      await api.post(`/admin/users/${userId}/logout-all`)
+      ok('Все сессии пользователя завершены')
+    } catch {
+      fail('Не удалось завершить сессии пользователя.')
+    } finally {
+      setSavingAction('')
+    }
   }
 
   return (
@@ -124,6 +153,7 @@ export default function AdminUsersPage() {
           <p>Найдено: {total}</p>
         </div>
       </section>
+      {message && <p>{message}</p>}
       {error && <p className="error">{error}</p>}
       {loading ? (
         <p>Загрузка...</p>
@@ -145,19 +175,23 @@ export default function AdminUsersPage() {
                   <td>{u.email}</td>
                   <td>{u.name}</td>
                   <td>
-                    <select value={u.role} onChange={(e) => void changeRole(u.id, e.target.value as AdminUser['role'])}>
+                    <select
+                      value={u.role}
+                      disabled={savingAction !== ''}
+                      onChange={(e) => void changeRole(u.id, e.target.value as AdminUser['role'])}
+                    >
                       <option value="user">user</option>
                       <option value="admin">admin</option>
                       <option value="superadmin">superadmin</option>
                     </select>
                   </td>
                   <td>
-                    <button onClick={() => void toggleActive(u.id, u.is_active)}>
+                    <button disabled={savingAction !== ''} onClick={() => void toggleActive(u.id, u.is_active)}>
                       {u.is_active ? 'Активен' : 'Заблокирован'}
                     </button>
                   </td>
                   <td>
-                    <button onClick={() => void logoutAll(u.id)}>Logout all</button>
+                    <button disabled={savingAction !== ''} onClick={() => void logoutAll(u.id)}>Logout all</button>
                   </td>
                 </tr>
               ))}

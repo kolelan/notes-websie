@@ -5,11 +5,11 @@
 }
 
 .card {
-  border: 1px solid #d8d8d8;
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 16px;
-  background: #fff;
+  background: var(--color-surface);
 }
 
 .row {
@@ -41,14 +41,15 @@ select {
 
 button {
   padding: 8px 12px;
-  border: 1px solid #999;
-  background: #f5f5f5;
+  border: 1px solid var(--color-button-border);
+  background: var(--color-button-bg);
   border-radius: 6px;
   cursor: pointer;
+  color: var(--color-text);
 }
 
 .error {
-  color: #b32121;
+  color: var(--color-error);
 }
 
 textarea {
@@ -64,7 +65,7 @@ ul {
 }
 
 li.selected {
-  background: #eef4ff;
+  background: var(--color-selected);
   border-radius: 6px;
   padding: 4px 6px;
 }
@@ -76,10 +77,10 @@ li.selected {
 
 .note-content {
   white-space: pre-wrap;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--color-border-soft);
   border-radius: 6px;
   padding: 10px;
-  background: #fafafa;
+  background: var(--color-surface-muted);
 }
 
 .group-tree {
@@ -102,19 +103,19 @@ li.selected {
 .tree-toggle-placeholder {
   min-width: 28px;
   text-align: center;
-  color: #777;
+  color: var(--color-text-muted);
 }
 
 .group-link-btn {
   border: 0;
   background: transparent;
   padding: 0;
-  color: #2454c4;
+  color: var(--color-link);
   text-decoration: underline;
 }
 
 .group-count {
-  color: #666;
+  color: var(--color-text-muted);
   font-size: 0.9rem;
 }
 
@@ -149,14 +150,14 @@ li.selected {
 
 .notes-table th,
 .notes-table td {
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid var(--color-border-soft);
   padding: 8px;
   text-align: left;
   vertical-align: top;
 }
 
 .selected-row {
-  background: #eef4ff;
+  background: var(--color-selected);
 }
 
 .tile-grid {
@@ -166,9 +167,21 @@ li.selected {
 }
 
 .note-tile {
-  border: 1px solid #d8d8d8;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 12px;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.home-header h1 {
+  margin: 0;
+}
+
+.hero {
+  background: var(--color-surface-accent);
 }
 
 @media (max-width: 800px) {

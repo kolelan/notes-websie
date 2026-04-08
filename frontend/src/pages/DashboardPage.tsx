@@ -301,7 +301,10 @@ export default function DashboardPage() {
         description: editNoteDescription,
         content: editNoteContent,
       })
-    }, 'Заметка обновлена')
+      if (selectedGroupId) {
+        await api.post(`/notes/${selectedNoteId}/attach-to-group`, { group_id: selectedGroupId })
+      }
+    }, selectedGroupId ? 'Заметка обновлена и прикреплена к группе' : 'Заметка обновлена')
   }
 
   async function attachToGroup() {
@@ -407,6 +410,8 @@ export default function DashboardPage() {
       <header className="row">
         <h1>Dashboard</h1>
         <div className="row">
+          <Link to="/">Главная</Link>
+          <Link to="/profile">Профиль</Link>
           {canOpenAdmin && <Link to="/admin/users">Admin</Link>}
           <button onClick={onLogout}>Выйти</button>
         </div>
@@ -643,6 +648,7 @@ export default function DashboardPage() {
               ))}
             </select>
           </label>
+          <p className="muted">Если выбрать группу, при сохранении заметка будет сразу прикреплена к ней.</p>
           <div className="row">
             <button onClick={() => void attachToGroup()}>Attach to group</button>
             <button onClick={() => void copyToGroup()}>Copy to group</button>

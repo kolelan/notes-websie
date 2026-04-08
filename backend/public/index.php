@@ -11,6 +11,7 @@ use App\Http\Controller\AdminController;
 use App\Http\Controller\GroupController;
 use App\Http\Controller\NoteController;
 use App\Http\Controller\PermissionController;
+use App\Http\Controller\ProfileController;
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\AuthMiddleware;
 use App\Http\Middleware\RateLimitMiddleware;
@@ -64,6 +65,7 @@ $adminController = new AdminController($pdo);
 $noteController = new NoteController($pdo, $permissionService);
 $groupController = new GroupController($pdo, $permissionService);
 $permissionController = new PermissionController($pdo, $permissionService);
+$profileController = new ProfileController($pdo);
 $authMiddleware = new AuthMiddleware($jwtService);
 $adminMiddleware = new AdminMiddleware();
 
@@ -80,8 +82,12 @@ $app->post('/auth/login', [$authController, 'login'])->add(new RateLimitMiddlewa
 $app->post('/auth/register', [$authController, 'register'])->add(new RateLimitMiddleware($redis, 10, 60));
 
 $app->get('/public/notes/{id}', [$noteController, 'publicShow']);
+$app->get('/public/notes', [$noteController, 'publicList']);
+$app->get('/public/notes/filters/authors', [$noteController, 'publicFilterAuthors']);
+$app->get('/public/notes/filters/tags', [$noteController, 'publicFilterTags']);
+$app->get('/public/notes/filters/groups', [$noteController, 'publicFilterGroups']);
 
-$app->group('', function ($group) use ($noteController, $groupController, $permissionController, $redis): void {
+$app->group('', function ($group) use ($noteController, $groupController, $permissionController, $profileController, $redis): void {
     $group->get('/notes', [$noteController, 'list']);
     $group->get('/notes/overview', [$noteController, 'overview']);
     $group->get('/notes/{id}', [$noteController, 'show']);
@@ -90,6 +96,7 @@ $app->group('', function ($group) use ($noteController, $groupController, $permi
     $group->delete('/notes/{id}', [$noteController, 'delete']);
     $group->put('/notes/{id}/public', [$noteController, 'setPublic']);
     $group->post('/notes/{id}/attach-to-group', [$noteController, 'attachToGroup']);
+    $group->delete('/notes/{id}/groups/{groupId}', [$noteController, 'detachFromGroup']);
     $group->post('/notes/{id}/copy-to-group', [$noteController, 'copyToGroup']);
     $group->get('/tags', [$noteController, 'listTags']);
     $group->post('/notes/{id}/tags', [$noteController, 'addTag']);
@@ -106,6 +113,8 @@ $app->group('', function ($group) use ($noteController, $groupController, $permi
     $group->get('/permissions/target/{type}/{id}', [$permissionController, 'listForTarget']);
     $group->post('/permissions', [$permissionController, 'create']);
     $group->delete('/permissions/{id}', [$permissionController, 'delete']);
+    $group->get('/me', [$profileController, 'me']);
+    $group->patch('/me', [$profileController, 'updateMe']);
 })->add($authMiddleware);
 
 $app->group('/admin', function ($group) use ($adminController): void {

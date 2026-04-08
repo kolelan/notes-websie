@@ -53,7 +53,7 @@ export default function RegisterPage() {
         <button disabled={loading}>{loading ? 'Создаем...' : 'Зарегистрироваться'}</button>
       </form>
       <p>
-        Уже есть аккаунт? <Link to="/">Войти</Link>
+        Уже есть аккаунт? <Link to="/login">Войти</Link>
       </p>
     </main>
   )

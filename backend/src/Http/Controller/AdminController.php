@@ -12,6 +12,7 @@ final class AdminController
 {
     private const ALLOWED_SETTING_KEYS = [
         'yandex_metrika',
+        'security.waf',
         'public.homepage.hero',
         'public.homepage.tagline',
         'public.features',

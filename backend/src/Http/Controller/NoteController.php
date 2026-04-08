@@ -160,6 +160,201 @@ final class NoteController
         return $this->json($response, ['data' => $note]);
     }
 
+    public function publicList(Request $request, Response $response): Response
+    {
+        $query = $request->getQueryParams();
+        $authorId = trim((string)($query['author_id'] ?? ''));
+        $authorNameLike = trim((string)($query['author_name_like'] ?? ''));
+        $titleLike = trim((string)($query['title_like'] ?? ''));
+        $descriptionLike = trim((string)($query['description_like'] ?? ''));
+        $publishedFrom = trim((string)($query['published_from'] ?? ''));
+        $publishedTo = trim((string)($query['published_to'] ?? ''));
+        $tagId = trim((string)($query['tag_id'] ?? ''));
+        $groupId = trim((string)($query['group_id'] ?? ''));
+        $sortByRaw = trim((string)($query['sort_by'] ?? 'published_at'));
+        $sortDirRaw = trim((string)($query['sort_dir'] ?? 'desc'));
+        $page = max(1, (int)($query['page'] ?? 1));
+        $limit = (int)($query['limit'] ?? 20);
+        if ($limit < 1) {
+            $limit = 20;
+        }
+        if ($limit > 100) {
+            $limit = 100;
+        }
+        $offset = ($page - 1) * $limit;
+
+        $sortMap = [
+            'published_at' => 'n.updated_at',
+            'title' => 'n.title',
+            'author' => 'u.name',
+        ];
+        $sortBy = $sortMap[$sortByRaw] ?? $sortMap['published_at'];
+        $sortDir = mb_strtolower($sortDirRaw) === 'asc' ? 'ASC' : 'DESC';
+
+        $params = [];
+        $where = ['p.target_type = \'note\'', 'p.grantee_type = \'public\'', 'p.can_read = TRUE'];
+        if ($authorId !== '') {
+            $where[] = 'n.owner_id = :author_id';
+            $params['author_id'] = $authorId;
+        }
+        if ($authorNameLike !== '') {
+            $where[] = 'u.name ILIKE :author_name_like';
+            $params['author_name_like'] = '%' . $authorNameLike . '%';
+        }
+        if ($titleLike !== '') {
+            $where[] = 'n.title ILIKE :title_like';
+            $params['title_like'] = '%' . $titleLike . '%';
+        }
+        if ($descriptionLike !== '') {
+            $where[] = 'n.description ILIKE :description_like';
+            $params['description_like'] = '%' . $descriptionLike . '%';
+        }
+        if ($publishedFrom !== '') {
+            $where[] = 'n.updated_at >= CAST(:published_from AS timestamptz)';
+            $params['published_from'] = $publishedFrom;
+        }
+        if ($publishedTo !== '') {
+            $where[] = 'n.updated_at <= CAST(:published_to AS timestamptz)';
+            $params['published_to'] = $publishedTo;
+        }
+        if ($tagId !== '') {
+            $where[] = 'EXISTS (SELECT 1 FROM note_tag ntf WHERE ntf.note_id = n.id AND ntf.tag_id = :tag_id)';
+            $params['tag_id'] = $tagId;
+        }
+        if ($groupId !== '') {
+            $where[] = 'EXISTS (SELECT 1 FROM note_group ngf WHERE ngf.note_id = n.id AND ngf.group_id = :group_id)';
+            $params['group_id'] = $groupId;
+        }
+        $whereSql = implode(' AND ', $where);
+
+        $countStmt = $this->pdo->prepare(
+            'SELECT COUNT(DISTINCT n.id)
+             FROM note n
+             INNER JOIN "user" u ON u.id = n.owner_id
+             INNER JOIN permission p ON p.target_id = n.id
+             WHERE ' . $whereSql
+        );
+        $countStmt->execute($params);
+        $total = (int)$countStmt->fetchColumn();
+
+        $stmt = $this->pdo->prepare(
+            'SELECT
+                n.id,
+                n.title,
+                n.description,
+                n.content,
+                n.owner_id,
+                n.updated_at AS published_at,
+                u.name AS author_name,
+                COALESCE(
+                    json_agg(DISTINCT jsonb_build_object(\'id\', g.id, \'name\', g.name))
+                        FILTER (WHERE g.id IS NOT NULL),
+                    \'[]\'::json
+                ) AS groups,
+                COALESCE(
+                    json_agg(DISTINCT jsonb_build_object(\'id\', t.id, \'name\', t.name))
+                        FILTER (WHERE t.id IS NOT NULL),
+                    \'[]\'::json
+                ) AS tags
+             FROM note n
+             INNER JOIN "user" u ON u.id = n.owner_id
+             INNER JOIN permission p ON p.target_id = n.id
+             LEFT JOIN note_group ng ON ng.note_id = n.id
+             LEFT JOIN "group" g ON g.id = ng.group_id
+             LEFT JOIN note_tag nt ON nt.note_id = n.id
+             LEFT JOIN tag t ON t.id = nt.tag_id
+             WHERE ' . $whereSql . '
+             GROUP BY n.id, u.name
+             ORDER BY ' . $sortBy . ' ' . $sortDir . '
+             LIMIT :limit OFFSET :offset'
+        );
+        foreach ($params as $key => $value) {
+            $stmt->bindValue(':' . $key, $value);
+        }
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+        $rows = $stmt->fetchAll();
+        foreach ($rows as &$row) {
+            $row['groups'] = $this->decodeJsonArray($row['groups'] ?? null);
+            $row['tags'] = $this->decodeJsonArray($row['tags'] ?? null);
+        }
+        unset($row);
+
+        return $this->json($response, [
+            'data' => $rows,
+            'meta' => [
+                'page' => $page,
+                'limit' => $limit,
+                'total' => $total,
+                'pages' => (int)max(1, (int)ceil($total / $limit)),
+            ],
+        ]);
+    }
+
+    public function publicFilterAuthors(Request $request, Response $response): Response
+    {
+        $stmt = $this->pdo->query(
+            'SELECT
+                u.id,
+                u.name,
+                COUNT(DISTINCT n.id)::int AS notes_count
+             FROM permission p
+             INNER JOIN note n ON n.id = p.target_id
+             INNER JOIN "user" u ON u.id = n.owner_id
+             WHERE p.target_type = \'note\' AND p.grantee_type = \'public\' AND p.can_read = TRUE
+             GROUP BY u.id, u.name
+             ORDER BY u.name ASC'
+        );
+        return $this->json($response, ['data' => $stmt->fetchAll()]);
+    }
+
+    public function publicFilterTags(Request $request, Response $response): Response
+    {
+        $stmt = $this->pdo->query(
+            'SELECT
+                t.id,
+                t.name,
+                COUNT(DISTINCT n.id)::int AS notes_count
+             FROM permission p
+             INNER JOIN note n ON n.id = p.target_id
+             INNER JOIN note_tag nt ON nt.note_id = n.id
+             INNER JOIN tag t ON t.id = nt.tag_id
+             WHERE p.target_type = \'note\' AND p.grantee_type = \'public\' AND p.can_read = TRUE
+             GROUP BY t.id, t.name
+             ORDER BY t.name ASC'
+        );
+        return $this->json($response, ['data' => $stmt->fetchAll()]);
+    }
+
+    public function publicFilterGroups(Request $request, Response $response): Response
+    {
+        $authorId = trim((string)($request->getQueryParams()['author_id'] ?? ''));
+        $params = [];
+        $authorFilter = '';
+        if ($authorId !== '') {
+            $authorFilter = ' AND n.owner_id = :author_id';
+            $params['author_id'] = $authorId;
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT
+                g.id,
+                g.name,
+                COUNT(DISTINCT n.id)::int AS notes_count
+             FROM permission p
+             INNER JOIN note n ON n.id = p.target_id
+             INNER JOIN note_group ng ON ng.note_id = n.id
+             INNER JOIN "group" g ON g.id = ng.group_id
+             WHERE p.target_type = \'note\' AND p.grantee_type = \'public\' AND p.can_read = TRUE'
+             . $authorFilter .
+            ' GROUP BY g.id, g.name
+              ORDER BY g.name ASC'
+        );
+        $stmt->execute($params);
+        return $this->json($response, ['data' => $stmt->fetchAll()]);
+    }
+
     public function create(Request $request, Response $response): Response
     {
         $payload = (array)$request->getParsedBody();
@@ -271,6 +466,37 @@ final class NoteController
         ]);
 
         return $this->json($response, ['data' => ['note_id' => $noteId, 'group_id' => $groupId, 'is_copy' => false]]);
+    }
+
+    public function detachFromGroup(Request $request, Response $response, array $args): Response
+    {
+        $ownerId = (string)$request->getAttribute('user_id', '');
+        $noteId = (string)($args['id'] ?? '');
+        $groupId = (string)($args['groupId'] ?? '');
+
+        if ($groupId === '') {
+            return $this->json($response, ['error' => 'Field groupId is required'], 422);
+        }
+
+        if (!$this->noteExistsForOwner($noteId, $ownerId)) {
+            return $this->json($response, ['error' => 'Note not found'], 404);
+        }
+
+        if (!$this->groupExistsForOwner($groupId, $ownerId)) {
+            return $this->json($response, ['error' => 'Group not found'], 404);
+        }
+
+        $stmt = $this->pdo->prepare(
+            'DELETE FROM note_group
+             WHERE note_id = :note_id
+               AND group_id = :group_id'
+        );
+        $stmt->execute([
+            'note_id' => $noteId,
+            'group_id' => $groupId,
+        ]);
+
+        return $response->withStatus(204);
     }
 
     public function copyToGroup(Request $request, Response $response, array $args): Response
