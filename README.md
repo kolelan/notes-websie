@@ -105,11 +105,13 @@
 - `GET /tags` (теги текущего пользователя по его заметкам)
 
 ### Permissions
-- `GET /permissions/target/{type}/{id}`
-- `POST /permissions`
-- `PUT /permissions/{id}`
-- `DELETE /permissions/{id}`
+- `GET /permissions/target/{type}/{id}` (для владельца)
+- `POST /permissions` (для владельца)
+- `DELETE /permissions/{id}` (для владельца)
 - `POST /transfer-ownership`
+
+### Public
+- `GET /public/notes/{id}` (если выставлен `public can_read`)
 
 ## Безопасность
 

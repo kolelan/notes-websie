@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 use App\Database\PdoFactory;
 use App\Auth\JwtService;
+use App\Acl\PermissionService;
 use App\Http\Controller\AuthController;
 use App\Http\Controller\GroupController;
 use App\Http\Controller\NoteController;
+use App\Http\Controller\PermissionController;
 use App\Http\Middleware\AuthMiddleware;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -19,10 +21,12 @@ $app = AppFactory::create();
 $app->addBodyParsingMiddleware();
 
 $pdo = PdoFactory::createFromEnv();
+$permissionService = new PermissionService($pdo);
 $jwtService = new JwtService();
 $authController = new AuthController($pdo, $jwtService);
-$noteController = new NoteController($pdo);
+$noteController = new NoteController($pdo, $permissionService);
 $groupController = new GroupController($pdo);
+$permissionController = new PermissionController($pdo, $permissionService);
 $authMiddleware = new AuthMiddleware($jwtService);
 
 $app->get('/health', static function (Request $request, Response $response): Response {
@@ -34,7 +38,9 @@ $app->post('/auth/login', [$authController, 'login']);
 $app->post('/auth/refresh', [$authController, 'refresh']);
 $app->post('/auth/logout', [$authController, 'logout']);
 
-$app->group('', function ($group) use ($noteController, $groupController): void {
+$app->get('/public/notes/{id}', [$noteController, 'publicShow']);
+
+$app->group('', function ($group) use ($noteController, $groupController, $permissionController): void {
     $group->get('/notes', [$noteController, 'list']);
     $group->get('/notes/{id}', [$noteController, 'show']);
     $group->post('/notes', [$noteController, 'create']);
@@ -51,6 +57,9 @@ $app->group('', function ($group) use ($noteController, $groupController): void 
     $group->post('/groups', [$groupController, 'create']);
     $group->put('/groups/{id}', [$groupController, 'update']);
     $group->delete('/groups/{id}', [$groupController, 'delete']);
+    $group->get('/permissions/target/{type}/{id}', [$permissionController, 'listForTarget']);
+    $group->post('/permissions', [$permissionController, 'create']);
+    $group->delete('/permissions/{id}', [$permissionController, 'delete']);
 })->add($authMiddleware);
 
 $app->run();

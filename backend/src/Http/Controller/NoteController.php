@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace App\Http\Controller;
 
+use App\Acl\PermissionService;
 use PDO;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
 final class NoteController
 {
-    public function __construct(private readonly PDO $pdo)
-    {
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly PermissionService $permissionService
+    ) {
     }
 
     public function list(Request $request, Response $response): Response
@@ -44,14 +47,19 @@ final class NoteController
 
     public function show(Request $request, Response $response, array $args): Response
     {
+        $noteId = (string)($args['id'] ?? '');
+        $userId = (string)$request->getAttribute('user_id', '');
+
+        if (!$this->permissionService->canReadNote($userId, $noteId)) {
+            $response->getBody()->write((string)json_encode(['error' => 'Note not found'], JSON_UNESCAPED_UNICODE));
+            return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
+        }
+
         $stmt = $this->pdo->prepare(
             'SELECT id, title, description, content, owner_id, created_at, updated_at
-             FROM note WHERE id = :id AND owner_id = :owner_id'
+             FROM note WHERE id = :id'
         );
-        $stmt->execute([
-            'id' => $args['id'] ?? '',
-            'owner_id' => (string)$request->getAttribute('user_id', ''),
-        ]);
+        $stmt->execute(['id' => $noteId]);
         $note = $stmt->fetch();
 
         if ($note === false) {
@@ -62,6 +70,27 @@ final class NoteController
         $response->getBody()->write((string)json_encode(['data' => $note], JSON_UNESCAPED_UNICODE));
 
         return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    public function publicShow(Request $request, Response $response, array $args): Response
+    {
+        $noteId = (string)($args['id'] ?? '');
+        if (!$this->permissionService->canReadNote(null, $noteId)) {
+            return $this->json($response, ['error' => 'Note not found'], 404);
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT id, title, description, content, owner_id, created_at, updated_at
+             FROM note WHERE id = :id'
+        );
+        $stmt->execute(['id' => $noteId]);
+        $note = $stmt->fetch();
+
+        if ($note === false) {
+            return $this->json($response, ['error' => 'Note not found'], 404);
+        }
+
+        return $this->json($response, ['data' => $note]);
     }
 
     public function create(Request $request, Response $response): Response
