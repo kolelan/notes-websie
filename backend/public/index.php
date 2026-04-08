@@ -7,9 +7,11 @@ use App\Auth\JwtService;
 use App\Acl\PermissionService;
 use App\Cache\RedisFactory;
 use App\Http\Controller\AuthController;
+use App\Http\Controller\AdminController;
 use App\Http\Controller\GroupController;
 use App\Http\Controller\NoteController;
 use App\Http\Controller\PermissionController;
+use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\AuthMiddleware;
 use App\Http\Middleware\RateLimitMiddleware;
 use App\Http\Middleware\RequestContextMiddleware;
@@ -58,10 +60,12 @@ $redis = RedisFactory::createFromEnv();
 $permissionService = new PermissionService($pdo);
 $jwtService = new JwtService();
 $authController = new AuthController($pdo, $jwtService);
+$adminController = new AdminController($pdo);
 $noteController = new NoteController($pdo, $permissionService);
 $groupController = new GroupController($pdo, $permissionService);
 $permissionController = new PermissionController($pdo, $permissionService);
 $authMiddleware = new AuthMiddleware($jwtService);
+$adminMiddleware = new AdminMiddleware();
 
 $app->get('/health', static function (Request $request, Response $response): Response {
     $response->getBody()->write((string)json_encode(['status' => 'ok'], JSON_UNESCAPED_UNICODE));
@@ -103,5 +107,14 @@ $app->group('', function ($group) use ($noteController, $groupController, $permi
     $group->post('/permissions', [$permissionController, 'create']);
     $group->delete('/permissions/{id}', [$permissionController, 'delete']);
 })->add($authMiddleware);
+
+$app->group('/admin', function ($group) use ($adminController): void {
+    $group->get('/users', [$adminController, 'listUsers']);
+    $group->patch('/users/{id}', [$adminController, 'updateUser']);
+    $group->post('/users/{id}/logout-all', [$adminController, 'revokeUserSessions']);
+    $group->get('/settings', [$adminController, 'listSettings']);
+    $group->put('/settings/{key}', [$adminController, 'upsertSetting']);
+    $group->get('/audit', [$adminController, 'listAudit']);
+})->add($adminMiddleware)->add($authMiddleware);
 
 $app->run();

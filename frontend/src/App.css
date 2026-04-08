@@ -170,3 +170,13 @@ li.selected {
   border-radius: 8px;
   padding: 12px;
 }
+
+@media (max-width: 800px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compact-filters-row {
+    grid-template-columns: 1fr;
+  }
+}

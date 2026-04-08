@@ -101,8 +101,15 @@ final class NoteController
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+        foreach ($rows as &$row) {
+            $row['groups'] = $this->decodeJsonArray($row['groups'] ?? null);
+            $row['tags'] = $this->decodeJsonArray($row['tags'] ?? null);
+            $row['is_public'] = (bool)($row['is_public'] ?? false);
+        }
+        unset($row);
 
-        return $this->json($response, ['data' => $stmt->fetchAll()]);
+        return $this->json($response, ['data' => $rows]);
     }
 
     public function show(Request $request, Response $response, array $args): Response
@@ -461,5 +468,20 @@ final class NoteController
     {
         $response->getBody()->write((string)json_encode($payload, JSON_UNESCAPED_UNICODE));
         return $response->withStatus($status)->withHeader('Content-Type', 'application/json');
+    }
+
+    private function decodeJsonArray(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+        if (!is_string($value)) {
+            return [];
+        }
+        $decoded = json_decode($value, true);
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
+            return [];
+        }
+        return $decoded;
     }
 }

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { api, setAuthToken } from '../lib/api'
 import { readSession, writeSession } from '../lib/auth'
+import { parseJwt } from '../lib/jwt'
 import type { ApiEnvelope, DashboardNote, Group, Note } from '../types/api'
 
 function flattenGroups(groups: Group[], level = 0): Array<{ id: string; name: string; level: number }> {
@@ -76,6 +77,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [canOpenAdmin, setCanOpenAdmin] = useState(false)
   const navigate = useNavigate()
 
   async function loadData() {
@@ -86,6 +88,8 @@ export default function DashboardPage() {
     }
 
     setAuthToken(session.accessToken)
+    const role = parseJwt(session.accessToken)?.role ?? 'user'
+    setCanOpenAdmin(['admin', 'superadmin'].includes(role))
     try {
       const [gRes, nRes, oRes, tRes] = await Promise.all([
         api.get<ApiEnvelope<Group[]>>('/groups'),
@@ -402,7 +406,10 @@ export default function DashboardPage() {
     <main className="page">
       <header className="row">
         <h1>Dashboard</h1>
-        <button onClick={onLogout}>Выйти</button>
+        <div className="row">
+          {canOpenAdmin && <Link to="/admin/users">Admin</Link>}
+          <button onClick={onLogout}>Выйти</button>
+        </div>
       </header>
 
       {message && <p>{message}</p>}
