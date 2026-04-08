@@ -54,6 +54,27 @@ final class GroupController
         return $this->json($response, ['data' => $group]);
     }
 
+    public function noteCounts(Request $request, Response $response): Response
+    {
+        $ownerId = (string)$request->getAttribute('user_id', '');
+        $stmt = $this->pdo->prepare(
+            'SELECT
+                g.id AS group_id,
+                g.name AS group_name,
+                g.updated_at,
+                COUNT(n.id)::int AS notes_count
+             FROM "group" g
+             LEFT JOIN note_group ng ON ng.group_id = g.id
+             LEFT JOIN note n ON n.id = ng.note_id AND n.owner_id = :owner_id
+             WHERE g.owner_id = :owner_id
+             GROUP BY g.id, g.name, g.updated_at
+             ORDER BY g.updated_at DESC'
+        );
+        $stmt->execute(['owner_id' => $ownerId]);
+
+        return $this->json($response, ['data' => $stmt->fetchAll()]);
+    }
+
     public function create(Request $request, Response $response): Response
     {
         $ownerId = (string)$request->getAttribute('user_id', '');

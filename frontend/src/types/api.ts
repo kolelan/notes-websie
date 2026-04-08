@@ -22,3 +22,16 @@ export type Note = {
   owner_id: string
 }
 
+export type DashboardNote = {
+  id: string
+  title: string
+  description: string
+  content: string
+  owner_id: string
+  updated_at: string
+  author_name: string
+  is_public: boolean
+  groups: Array<{ id: string; name: string }>
+  tags: Array<{ id: string; name: string }>
+}
+

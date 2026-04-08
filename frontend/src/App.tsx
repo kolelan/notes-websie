@@ -4,6 +4,7 @@ import { readSession } from './lib/auth'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
+import NoteDetailsPage from './pages/NoteDetailsPage'
 import './App.css'
 
 function PrivateRoute({ children }: { children: ReactElement }) {
@@ -22,6 +23,10 @@ export default function App() {
             <DashboardPage />
           </PrivateRoute>
         }
+      />
+      <Route
+        path="/notes/:noteId"
+        element={<NoteDetailsPage />}
       />
     </Routes>
   )

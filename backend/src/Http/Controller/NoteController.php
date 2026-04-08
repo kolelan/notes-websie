@@ -45,6 +45,66 @@ final class NoteController
         return $response->withHeader('Content-Type', 'application/json');
     }
 
+    public function overview(Request $request, Response $response): Response
+    {
+        $ownerId = (string)$request->getAttribute('user_id', '');
+        $groupId = trim((string)($request->getQueryParams()['group_id'] ?? ''));
+        $tagId = trim((string)($request->getQueryParams()['tag_id'] ?? ''));
+
+        $params = ['owner_id' => $ownerId];
+        $groupFilter = '';
+        $tagFilter = '';
+        if ($groupId !== '') {
+            $groupFilter = ' AND EXISTS (
+                SELECT 1 FROM note_group ngf WHERE ngf.note_id = n.id AND ngf.group_id = :group_id
+            )';
+            $params['group_id'] = $groupId;
+        }
+        if ($tagId !== '') {
+            $tagFilter = ' AND EXISTS (
+                SELECT 1 FROM note_tag ntf WHERE ntf.note_id = n.id AND ntf.tag_id = :tag_id
+            )';
+            $params['tag_id'] = $tagId;
+        }
+
+        $sql = 'SELECT
+                    n.id,
+                    n.title,
+                    n.description,
+                    n.content,
+                    n.owner_id,
+                    n.updated_at,
+                    u.name AS author_name,
+                    COALESCE(BOOL_OR(p.grantee_type = \'public\' AND p.can_read = TRUE), FALSE) AS is_public,
+                    COALESCE(
+                        json_agg(DISTINCT jsonb_build_object(\'id\', g.id, \'name\', g.name))
+                            FILTER (WHERE g.id IS NOT NULL),
+                        \'[]\'::json
+                    ) AS groups,
+                    COALESCE(
+                        json_agg(DISTINCT jsonb_build_object(\'id\', t.id, \'name\', t.name))
+                            FILTER (WHERE t.id IS NOT NULL),
+                        \'[]\'::json
+                    ) AS tags
+                FROM note n
+                LEFT JOIN "user" u ON u.id = n.owner_id
+                LEFT JOIN note_group ng ON ng.note_id = n.id
+                LEFT JOIN "group" g ON g.id = ng.group_id
+                LEFT JOIN note_tag nt ON nt.note_id = n.id
+                LEFT JOIN tag t ON t.id = nt.tag_id
+                LEFT JOIN permission p ON p.target_type = \'note\' AND p.target_id = n.id
+                WHERE n.owner_id = :owner_id'
+                . $groupFilter
+                . $tagFilter
+                . ' GROUP BY n.id, u.name
+                    ORDER BY n.updated_at DESC';
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+
+        return $this->json($response, ['data' => $stmt->fetchAll()]);
+    }
+
     public function show(Request $request, Response $response, array $args): Response
     {
         $noteId = (string)($args['id'] ?? '');
@@ -345,6 +405,36 @@ final class NoteController
         ]);
 
         return $response->withStatus(204);
+    }
+
+    public function setPublic(Request $request, Response $response, array $args): Response
+    {
+        $ownerId = (string)$request->getAttribute('user_id', '');
+        $noteId = (string)($args['id'] ?? '');
+        $payload = (array)$request->getParsedBody();
+        $isPublic = (bool)($payload['is_public'] ?? false);
+
+        if (!$this->noteExistsForOwner($noteId, $ownerId)) {
+            return $this->json($response, ['error' => 'Note not found'], 404);
+        }
+
+        if ($isPublic) {
+            $stmt = $this->pdo->prepare(
+                'INSERT INTO permission (target_type, target_id, grantee_type, grantee_id, can_read, can_edit, can_manage, can_transfer)
+                 VALUES (\'note\', :target_id, \'public\', NULL, TRUE, FALSE, FALSE, FALSE)
+                 ON CONFLICT (target_type, target_id, grantee_type, grantee_id)
+                 DO UPDATE SET can_read = TRUE'
+            );
+            $stmt->execute(['target_id' => $noteId]);
+        } else {
+            $stmt = $this->pdo->prepare(
+                'DELETE FROM permission
+                 WHERE target_type = \'note\' AND target_id = :target_id AND grantee_type = \'public\''
+            );
+            $stmt->execute(['target_id' => $noteId]);
+        }
+
+        return $this->json($response, ['data' => ['id' => $noteId, 'is_public' => $isPublic]]);
     }
 
     private function noteExistsForOwner(string $noteId, string $ownerId): bool

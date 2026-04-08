@@ -16,6 +16,7 @@ use App\Http\Middleware\RequestContextMiddleware;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Factory\AppFactory;
+use Slim\Psr7\Response as SlimResponse;
 
 require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/../src/Config/bootstrap.php';
@@ -23,6 +24,34 @@ require __DIR__ . '/../src/Config/bootstrap.php';
 $app = AppFactory::create();
 $app->addBodyParsingMiddleware();
 $app->add(new RequestContextMiddleware());
+
+$corsAllowedOriginsRaw = (string)($_ENV['CORS_ALLOWED_ORIGINS'] ?? 'http://localhost:5173,http://127.0.0.1:5173');
+$corsAllowedOrigins = array_values(array_filter(array_map('trim', explode(',', $corsAllowedOriginsRaw))));
+
+$app->options('/{routes:.+}', function (Request $request, Response $response): Response {
+    return $response;
+});
+
+$app->add(function (Request $request, $handler) use ($corsAllowedOrigins): Response {
+    $origin = $request->getHeaderLine('Origin');
+    $isAllowed = in_array($origin, $corsAllowedOrigins, true);
+
+    if ($request->getMethod() === 'OPTIONS') {
+        $response = new SlimResponse(204);
+    } else {
+        $response = $handler->handle($request);
+    }
+
+    if ($isAllowed) {
+        $response = $response->withHeader('Access-Control-Allow-Origin', $origin);
+    }
+
+    return $response
+        ->withHeader('Vary', 'Origin')
+        ->withHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+        ->withHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-Id')
+        ->withHeader('Access-Control-Allow-Credentials', 'true');
+});
 
 $pdo = PdoFactory::createFromEnv();
 $redis = RedisFactory::createFromEnv();
@@ -50,10 +79,12 @@ $app->get('/public/notes/{id}', [$noteController, 'publicShow']);
 
 $app->group('', function ($group) use ($noteController, $groupController, $permissionController, $redis): void {
     $group->get('/notes', [$noteController, 'list']);
+    $group->get('/notes/overview', [$noteController, 'overview']);
     $group->get('/notes/{id}', [$noteController, 'show']);
     $group->post('/notes', [$noteController, 'create'])->add(new RateLimitMiddleware($redis, 20, 60));
     $group->put('/notes/{id}', [$noteController, 'update']);
     $group->delete('/notes/{id}', [$noteController, 'delete']);
+    $group->put('/notes/{id}/public', [$noteController, 'setPublic']);
     $group->post('/notes/{id}/attach-to-group', [$noteController, 'attachToGroup']);
     $group->post('/notes/{id}/copy-to-group', [$noteController, 'copyToGroup']);
     $group->get('/tags', [$noteController, 'listTags']);
@@ -61,6 +92,7 @@ $app->group('', function ($group) use ($noteController, $groupController, $permi
     $group->delete('/notes/{id}/tags/{tagId}', [$noteController, 'removeTag']);
 
     $group->get('/groups', [$groupController, 'list']);
+    $group->get('/groups/note-counts', [$groupController, 'noteCounts']);
     $group->get('/groups/{id}', [$groupController, 'show']);
     $group->post('/groups', [$groupController, 'create']);
     $group->put('/groups/{id}', [$groupController, 'update']);

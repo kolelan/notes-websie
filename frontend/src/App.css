@@ -50,3 +50,123 @@ button {
 .error {
   color: #b32121;
 }
+
+textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+ul {
+  padding-left: 18px;
+}
+
+li.selected {
+  background: #eef4ff;
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+
+.inline-link {
+  display: inline-block;
+  margin-top: 6px;
+}
+
+.note-content {
+  white-space: pre-wrap;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  padding: 10px;
+  background: #fafafa;
+}
+
+.group-tree {
+  list-style: none;
+  padding-left: 0;
+}
+
+.group-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.tree-toggle {
+  min-width: 28px;
+  padding: 2px 6px;
+}
+
+.tree-toggle-placeholder {
+  min-width: 28px;
+  text-align: center;
+  color: #777;
+}
+
+.group-link-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #2454c4;
+  text-decoration: underline;
+}
+
+.group-count {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.compact-filters {
+  padding: 12px 16px;
+}
+
+.compact-filters h2 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.compact-filters-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.compact-filters-row label {
+  margin-bottom: 0;
+}
+
+.notes-table-wrap {
+  overflow-x: auto;
+}
+
+.notes-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.notes-table th,
+.notes-table td {
+  border-bottom: 1px solid #e5e5e5;
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.selected-row {
+  background: #eef4ff;
+}
+
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.note-tile {
+  border: 1px solid #d8d8d8;
+  border-radius: 8px;
+  padding: 12px;
+}
