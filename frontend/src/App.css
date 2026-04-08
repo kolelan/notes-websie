@@ -92,7 +92,8 @@ li.selected {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 6px 0;
+  margin: 2px 0;
+  min-height: 24px;
 }
 
 .tree-toggle {
@@ -117,6 +118,24 @@ li.selected {
 .group-count {
   color: var(--color-text-muted);
   font-size: 0.9rem;
+}
+
+.group-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  width: auto;
+  white-space: nowrap;
+}
+
+.group-checkbox-label input {
+  width: auto;
+  margin: 0;
+}
+
+.group-name {
+  line-height: 1.2;
 }
 
 .compact-filters {

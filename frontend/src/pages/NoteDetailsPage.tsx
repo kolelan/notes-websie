@@ -85,14 +85,14 @@ export default function NoteDetailsPage() {
                 ) : (
                   <span className="tree-toggle-placeholder">•</span>
                 )}
-                <label className="row" style={{ gap: 8, marginBottom: 0 }}>
+                <label className="group-checkbox-label">
                   <input
                     type="checkbox"
                     checked={isChecked}
                     onChange={(e) => toggleGroupChecked(group.id, e.target.checked)}
                     disabled={!canEdit}
                   />
-                  <span>{group.name}</span>
+                  <span className="group-name">{group.name}</span>
                 </label>
                 {wasAttached && <span className="group-count">(привязана)</span>}
               </div>
