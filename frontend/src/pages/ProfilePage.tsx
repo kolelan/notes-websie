@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Alert, Button, Card, Input, Menu } from 'antd'
 import { api, setAuthToken } from '../lib/api'
 import { readSession } from '../lib/auth'
 import type { ApiEnvelope } from '../types/api'
@@ -79,29 +80,33 @@ export default function ProfilePage() {
     <main className="page">
       <header className="row">
         <h1>Профиль</h1>
-        <div className="row">
-          <Link to="/">Главная</Link>
-          <Link to="/dashboard">Dashboard</Link>
-        </div>
+        <Menu
+          mode="horizontal"
+          selectable={false}
+          items={[
+            { key: 'home', label: <Link to="/">Главная</Link> },
+            { key: 'dashboard', label: <Link to="/dashboard">Dashboard</Link> },
+          ]}
+        />
       </header>
-      {error && <p className="error">{error}</p>}
-      {message && <p>{message}</p>}
+      {error && <Alert type="error" message={error} showIcon style={{ marginBottom: 12 }} />}
+      {message && <Alert type="success" message={message} showIcon style={{ marginBottom: 12 }} />}
       {me && (
-        <section className="card">
+        <Card className="card">
           <p><strong>Email:</strong> {me.email}</p>
           <p><strong>Role:</strong> {me.role}</p>
           <p><strong>Создан:</strong> {me.created_at}</p>
           <label>
             Имя
-            <input value={name} onChange={(e) => setName(e.target.value)} />
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
           </label>
           <div className="row">
-            <button onClick={() => void saveName()} disabled={saving}>
+            <Button type="primary" onClick={() => void saveName()} loading={saving}>
               {saving ? 'Сохраняем...' : 'Сохранить'}
-            </button>
-            <button onClick={resetForm} type="button">Отменить изменения</button>
+            </Button>
+            <Button onClick={resetForm} type="default">Отменить изменения</Button>
           </div>
-        </section>
+        </Card>
       )}
     </main>
   )

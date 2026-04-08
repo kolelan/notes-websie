@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Alert, Button, Card, Input, Menu, Select, Switch } from 'antd'
 import { api, setAuthToken } from '../lib/api'
 import { readSession } from '../lib/auth'
 import { useActionStatus } from '../hooks/useActionStatus'
@@ -138,72 +139,81 @@ export default function AdminSettingsPage() {
     <main className="page">
       <header className="row">
         <h1>Admin: Settings</h1>
-        <div className="row">
-          <Link to="/admin/users">Users</Link>
-          <Link to="/admin/audit">Audit</Link>
-          <Link to="/dashboard">Dashboard</Link>
-        </div>
+        <Menu
+          mode="horizontal"
+          selectedKeys={['settings']}
+          items={[
+            { key: 'users', label: <Link to="/admin/users">Users</Link> },
+            { key: 'settings', label: <Link to="/admin/settings">Settings</Link> },
+            { key: 'audit', label: <Link to="/admin/audit">Audit</Link> },
+            { key: 'dashboard', label: <Link to="/dashboard">Dashboard</Link> },
+          ]}
+        />
       </header>
-      {message && <p>{message}</p>}
-      {error && <p className="error">{error}</p>}
-      <section className="card">
+      {message && <Alert type="success" message={message} showIcon style={{ marginBottom: 12 }} />}
+      {error && <Alert type="error" message={error} showIcon style={{ marginBottom: 12 }} />}
+      <Card className="card">
         <h2>Yandex Metrika</h2>
         <label>
           Counter ID
-          <input value={counterId} onChange={(e) => setCounterId(e.target.value)} />
+          <Input value={counterId} onChange={(e) => setCounterId(e.target.value)} />
         </label>
         <label>
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Включено
+          <Switch checked={enabled} onChange={setEnabled} /> Включено
         </label>
-        <button disabled={saving} onClick={() => void saveMetrika()}>
+        <Button type="primary" disabled={saving} onClick={() => void saveMetrika()}>
           {saving ? 'Сохраняем...' : 'Сохранить'}
-        </button>
-      </section>
+        </Button>
+      </Card>
 
-      <section className="card">
+      <Card className="card">
         <h2>WAF</h2>
         <label>
-          <input type="checkbox" checked={wafEnabled} onChange={(e) => setWafEnabled(e.target.checked)} /> Включено
+          <Switch checked={wafEnabled} onChange={setWafEnabled} /> Включено
         </label>
         <label>
           Режим
-          <select value={wafMode} onChange={(e) => setWafMode(e.target.value as 'off' | 'monitor' | 'block')}>
-            <option value="off">off</option>
-            <option value="monitor">monitor</option>
-            <option value="block">block</option>
-          </select>
+          <Select
+            value={wafMode}
+            options={[
+              { value: 'off', label: 'off' },
+              { value: 'monitor', label: 'monitor' },
+              { value: 'block', label: 'block' },
+            ]}
+            onChange={(value) => setWafMode(value)}
+          />
         </label>
         <label>
           Trusted IPs (по одному на строку)
-          <textarea rows={6} value={wafTrustedIps} onChange={(e) => setWafTrustedIps(e.target.value)} />
+          <Input.TextArea rows={6} value={wafTrustedIps} onChange={(e) => setWafTrustedIps(e.target.value)} />
         </label>
-        <button disabled={saving} onClick={() => void saveWafSetting()}>
+        <Button type="primary" disabled={saving} onClick={() => void saveWafSetting()}>
           {saving ? 'Сохраняем...' : 'Сохранить WAF'}
-        </button>
-      </section>
+        </Button>
+      </Card>
 
-      <section className="card">
+      <Card className="card">
         <h2>Произвольная настройка</h2>
         <label>
           Ключ
-          <input placeholder="например: public.homepage.hero" value={customKey} onChange={(e) => setCustomKey(e.target.value)} />
+          <Input placeholder="например: public.homepage.hero" value={customKey} onChange={(e) => setCustomKey(e.target.value)} />
         </label>
         <label>
           JSON value
-          <textarea rows={10} value={customJson} onChange={(e) => setCustomJson(e.target.value)} />
+          <Input.TextArea rows={10} value={customJson} onChange={(e) => setCustomJson(e.target.value)} />
         </label>
         <div className="row">
-          <button disabled={saving} onClick={() => void saveCustomSetting()}>
+          <Button type="primary" disabled={saving} onClick={() => void saveCustomSetting()}>
             {saving ? 'Сохраняем...' : 'Сохранить JSON-настройку'}
-          </button>
-          <button type="button" disabled={saving} onClick={resetCustomForm}>Сбросить форму</button>
+          </Button>
+          <Button type="default" disabled={saving} onClick={resetCustomForm}>Сбросить форму</Button>
         </div>
-      </section>
+      </Card>
 
-      <section className="card">
+      <Card className="card">
         <h2>Все настройки</h2>
         <pre className="note-content">{JSON.stringify(settings, null, 2)}</pre>
-      </section>
+      </Card>
     </main>
   )
 }

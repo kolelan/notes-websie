@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { Input, Pagination, Select, Table, Tree } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
+import type { TreeDataNode } from 'antd'
 import { api, setAuthToken } from '../lib/api'
 import { readSession, writeSession } from '../lib/auth'
 import { parseJwt } from '../lib/jwt'
@@ -53,9 +56,13 @@ export default function DashboardPage() {
   const [publicNoteIds, setPublicNoteIds] = useState<string[]>([])
   const [groupedNotesByGroup, setGroupedNotesByGroup] = useState<Array<{ groupId: string; groupName: string; notes: Note[] }>>([])
   const [groupNoteCounts, setGroupNoteCounts] = useState<Record<string, number>>({})
-  const [expandedGroupIds, setExpandedGroupIds] = useState<Record<string, boolean>>({})
   const [groupId, setGroupId] = useState('')
   const [tagId, setTagId] = useState('')
+  const [sortBy, setSortBy] = useState<'updated_at' | 'title' | 'author'>('updated_at')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [exactDate, setExactDate] = useState('')
+  const [titleLike, setTitleLike] = useState('')
+  const [descriptionLike, setDescriptionLike] = useState('')
   const [selectedNoteId, setSelectedNoteId] = useState('')
   const [selectedGroupId, setSelectedGroupId] = useState('')
   const [newGroupName, setNewGroupName] = useState('')
@@ -68,16 +75,17 @@ export default function DashboardPage() {
   const [editNoteContent, setEditNoteContent] = useState('')
   const [newTagName, setNewTagName] = useState('')
   const [existingTagName, setExistingTagName] = useState('')
-  const [tagSearchQuery, setTagSearchQuery] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<'reader' | 'editor' | 'manager'>('reader')
   const [acceptGroupId, setAcceptGroupId] = useState('')
   const [acceptToken, setAcceptToken] = useState('')
-  const [publicNoteId, setPublicNoteId] = useState('')
+  const [bulkTagName, setBulkTagName] = useState('')
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [canOpenAdmin, setCanOpenAdmin] = useState(false)
+  const [notesPage, setNotesPage] = useState(1)
+  const [notesPageSize, setNotesPageSize] = useState(25)
   const navigate = useNavigate()
 
   async function loadData() {
@@ -127,6 +135,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setLoading(true)
+    setNotesPage(1)
     void loadData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId, tagId])
@@ -149,7 +158,7 @@ export default function DashboardPage() {
     if (session) {
       setAuthToken(session.accessToken)
       try {
-        await api.post('/auth/logout-all')
+        await api.post('/auth/logout', { refresh_token: session.refreshToken })
       } catch {
         // ignore logout API errors, local logout still required
       }
@@ -192,13 +201,6 @@ export default function DashboardPage() {
     setSelectedForBulk((prev) => ({ ...prev, [noteId]: !prev[noteId] }))
   }
 
-  function toggleGroup(groupId: string) {
-    setExpandedGroupIds((prev) => ({
-      ...prev,
-      [groupId]: !prev[groupId],
-    }))
-  }
-
   function selectGroupAndScroll(groupIdValue: string) {
     setGroupId(groupIdValue)
     setTimeout(() => {
@@ -209,34 +211,12 @@ export default function DashboardPage() {
     }, 50)
   }
 
-  function renderGroupTree(items: Group[], level = 0) {
-    return (
-      <ul className="group-tree">
-        {items.map((g) => {
-          const hasChildren = Boolean(g.children && g.children.length > 0)
-          const isExpanded = expandedGroupIds[g.id] ?? true
-          const count = groupNoteCounts[g.id] ?? 0
-          return (
-            <li key={g.id} style={{ marginLeft: `${level * 12}px` }}>
-              <div className="group-row">
-                {hasChildren ? (
-                  <button type="button" className="tree-toggle" onClick={() => toggleGroup(g.id)}>
-                    {isExpanded ? '▾' : '▸'}
-                  </button>
-                ) : (
-                  <span className="tree-toggle-placeholder">•</span>
-                )}
-                <button type="button" className="group-link-btn" onClick={() => selectGroupAndScroll(g.id)}>
-                  {g.name}
-                </button>
-                <span className="group-count">({count})</span>
-              </div>
-              {hasChildren && isExpanded ? renderGroupTree(g.children ?? [], level + 1) : null}
-            </li>
-          )
-        })}
-      </ul>
-    )
+  function buildGroupTree(items: Group[]): TreeDataNode[] {
+    return items.map((g) => ({
+      key: g.id,
+      title: `${g.name} (${groupNoteCounts[g.id] ?? 0})`,
+      children: g.children?.length ? buildGroupTree(g.children) : undefined,
+    }))
   }
 
   async function createGroup() {
@@ -261,7 +241,6 @@ export default function DashboardPage() {
       setNewNoteDescription('')
       setNewNoteContent('')
       setSelectedNoteId(res.data.data.id)
-      setPublicNoteId(res.data.data.id)
     }, 'Заметка создана')
   }
 
@@ -354,21 +333,6 @@ export default function DashboardPage() {
     }, 'Инвайт принят')
   }
 
-  async function makePublicRead() {
-    if (!publicNoteId) {
-      setError('Укажите note id для публикации.')
-      return
-    }
-    await withAction(async () => {
-      await api.post('/permissions', {
-        target_type: 'note',
-        target_id: publicNoteId,
-        grantee_type: 'public',
-        can_read: true,
-      })
-    }, 'Публичный read доступ выдан')
-  }
-
   async function loadGroupedNotes() {
     setError('')
     setMessage('')
@@ -397,150 +361,437 @@ export default function DashboardPage() {
     }, isPublic ? 'Заметка сделана приватной' : 'Заметка опубликована')
   }
 
+  function getSelectedNoteIds(): string[] {
+    return Object.entries(selectedForBulk)
+      .filter(([, checked]) => checked)
+      .map(([id]) => id)
+  }
+
+  async function deleteNote(noteId: string) {
+    if (!window.confirm('Удалить заметку? Это действие необратимо.')) return
+    await withAction(async () => {
+      await api.delete(`/notes/${noteId}`)
+      setSelectedForBulk((prev) => {
+        const next = { ...prev }
+        delete next[noteId]
+        return next
+      })
+      if (selectedNoteId === noteId) setSelectedNoteId('')
+    }, 'Заметка удалена')
+  }
+
+  async function bulkAttachGroup() {
+    const noteIds = getSelectedNoteIds()
+    if (noteIds.length === 0) {
+      setError('Выберите заметки для групповой операции.')
+      return
+    }
+    if (!selectedGroupId) {
+      setError('Выберите группу для назначения.')
+      return
+    }
+    if (!window.confirm(`Назначить выбранную группу для ${noteIds.length} заметок?`)) return
+    await withAction(async () => {
+      await Promise.all(noteIds.map((id) => api.post(`/notes/${id}/attach-to-group`, { group_id: selectedGroupId })))
+    }, 'Группа назначена выбранным заметкам')
+  }
+
+  async function bulkAddTag() {
+    const noteIds = getSelectedNoteIds()
+    if (noteIds.length === 0) {
+      setError('Выберите заметки для групповой операции.')
+      return
+    }
+    const tagName = bulkTagName.trim()
+    if (!tagName) {
+      setError('Укажите тег для назначения.')
+      return
+    }
+    if (!window.confirm(`Назначить тег "${tagName}" для ${noteIds.length} заметок?`)) return
+    await withAction(async () => {
+      await Promise.all(noteIds.map((id) => api.post(`/notes/${id}/tags`, { name: tagName })))
+      setBulkTagName('')
+    }, 'Тег назначен выбранным заметкам')
+  }
+
+  async function bulkDeleteNotes() {
+    const noteIds = getSelectedNoteIds()
+    if (noteIds.length === 0) {
+      setError('Выберите заметки для удаления.')
+      return
+    }
+    if (!window.confirm(`Удалить ${noteIds.length} заметок? Это действие необратимо.`)) return
+    await withAction(async () => {
+      await Promise.all(noteIds.map((id) => api.delete(`/notes/${id}`)))
+      setSelectedForBulk({})
+      if (selectedNoteId && noteIds.includes(selectedNoteId)) setSelectedNoteId('')
+    }, 'Выбранные заметки удалены')
+  }
+
   if (loading) return <main className="page">Загрузка...</main>
 
   const groupItems = flattenGroups(groups)
-  const normalizedTagSearch = tagSearchQuery.trim().toLowerCase()
-  const filteredTags = normalizedTagSearch
-    ? tags.filter((t) => t.name.toLowerCase().includes(normalizedTagSearch))
-    : tags
+  const filteredByText = dashboardNotes.filter((n) => {
+    const titleOk = titleLike.trim() === '' || n.title.toLowerCase().includes(titleLike.trim().toLowerCase())
+    const descOk = descriptionLike.trim() === '' || (n.description ?? '').toLowerCase().includes(descriptionLike.trim().toLowerCase())
+    const dateOk = exactDate === '' || String(n.updated_at).slice(0, 10) === exactDate
+    return titleOk && descOk && dateOk
+  })
+  const sortedDashboardNotes = [...filteredByText].sort((a, b) => {
+    const dir = sortDir === 'asc' ? 1 : -1
+    if (sortBy === 'title') return a.title.localeCompare(b.title) * dir
+    if (sortBy === 'author') return (a.author_name ?? a.owner_id).localeCompare(b.author_name ?? b.owner_id) * dir
+    return (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()) * dir
+  })
+  const groupTreeData = buildGroupTree(groups)
+  const notesStart = (notesPage - 1) * notesPageSize
+  const pagedDashboardNotes = sortedDashboardNotes.slice(notesStart, notesStart + notesPageSize)
+  const notesColumns: ColumnsType<DashboardNote> = [
+    {
+      title: '',
+      key: 'bulk',
+      width: 44,
+      render: (_, n) => (
+        <input
+          type="checkbox"
+          checked={Boolean(selectedForBulk[n.id])}
+          onChange={() => toggleBulkSelection(n.id)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ),
+    },
+    { title: 'Название', dataIndex: 'title', key: 'title' },
+    {
+      title: 'Описание',
+      key: 'description',
+      render: (_, n) => n.description || 'Без описания',
+    },
+    {
+      title: 'Переход',
+      key: 'link',
+      render: (_, n) => (
+        <Link to={`/notes/${n.id}`} onClick={(e) => e.stopPropagation()} title="Редактировать" aria-label="Редактировать">
+          <i className="fa-solid fa-pen-to-square" aria-hidden="true" />
+        </Link>
+      ),
+    },
+    {
+      title: 'Публикация',
+      key: 'public',
+      render: (_, n) => {
+        const hint = n.is_public ? 'Сделать приватной' : 'Опубликовать'
+        return (
+          <button
+            type="button"
+            title={hint}
+            aria-label={hint}
+            className={n.is_public ? 'publish-btn publish-btn-private' : 'publish-btn publish-btn-public'}
+            onClick={(e) => { e.stopPropagation(); void toggleNotePublic(n.id, n.is_public) }}
+          >
+            <i className={n.is_public ? 'fa-solid fa-lock' : 'fa-solid fa-globe'} aria-hidden="true" />
+          </button>
+        )
+      },
+    },
+    { title: 'Группы', key: 'groups', render: (_, n) => n.groups.map((g) => g.name).join(', ') || '-' },
+    { title: 'Теги', key: 'tags', render: (_, n) => n.tags.map((t) => t.name).join(', ') || '-' },
+    { title: 'Автор', key: 'author', render: (_, n) => n.author_name || n.owner_id },
+    {
+      title: '',
+      key: 'delete',
+      width: 44,
+      render: (_, n) => (
+        <button
+          type="button"
+          title="Удалить"
+          aria-label="Удалить"
+          onClick={(e) => {
+            e.stopPropagation()
+            void deleteNote(n.id)
+          }}
+        >
+          <i className="fa-solid fa-trash" aria-hidden="true" />
+        </button>
+      ),
+    },
+  ]
 
   return (
     <main className="page">
       <header className="row">
         <h1>Dashboard</h1>
-        <div className="row">
-          <Link to="/">Главная</Link>
-          <Link to="/profile">Профиль</Link>
-          {canOpenAdmin && <Link to="/admin/users">Admin</Link>}
-          <button onClick={onLogout}>Выйти</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+          <button type="button">
+            <Link to="/dashboard">Dashboard</Link>
+          </button>
+          <button type="button">
+            <Link to="/profile">Профиль</Link>
+          </button>
+          {canOpenAdmin && (
+            <button type="button">
+              <Link to="/admin/users">Настройки</Link>
+            </button>
+          )}
+          <button type="button" onClick={onLogout}>Выйти</button>
         </div>
       </header>
 
       {message && <p>{message}</p>}
       {error && <p className="error">{error}</p>}
 
-      <section className="card compact-filters">
-        <h2>Фильтры</h2>
-        <div className="compact-filters-row">
-          <label>
-            По группе
-            <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-              <option value="">Все группы</option>
-              {groupItems.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {'  '.repeat(g.level)}
-                  {g.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            По тегу
-            <select value={tagId} onChange={(e) => setTagId(e.target.value)}>
-              <option value="">Все теги</option>
-              {filteredTags.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Поиск тега
-            <input
-              placeholder="Введите часть названия тега"
-              value={tagSearchQuery}
-              onChange={(e) => setTagSearchQuery(e.target.value)}
+      <section className="card">
+        <div className="home-filter-block">
+          <div className="home-filter-row">
+            <span className="home-filter-icon" title="Фильтрация">
+              <i className="fa-solid fa-filter" aria-hidden="true" />
+            </span>
+            <Select
+              value={groupId || undefined}
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="Группа"
+              onChange={(value) => setGroupId(value ?? '')}
+              options={groupItems.map((g) => ({
+                value: g.id,
+                label: `${'  '.repeat(g.level)}${g.name}`,
+              }))}
             />
-          </label>
+            <Select
+              value={tagId || undefined}
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="Тег"
+              onChange={(value) => setTagId(value ?? '')}
+              options={tags.map((t) => ({ value: t.id, label: t.name }))}
+            />
+            <div />
+          </div>
+          <div className="home-filter-row">
+            <span className="home-filter-icon" title="Сортировка">
+              <i className="fa-solid fa-sort" aria-hidden="true" />
+            </span>
+            <Select
+              value={sortBy}
+              onChange={(value) => setSortBy(value)}
+              options={[
+                { value: 'updated_at', label: 'По обновлению' },
+                { value: 'title', label: 'По названию' },
+                { value: 'author', label: 'По автору' },
+              ]}
+            />
+            <button type="button" title="По возрастанию" aria-label="По возрастанию" onClick={() => setSortDir('asc')}>
+              <i className="fa-solid fa-arrow-up" aria-hidden="true" />
+            </button>
+            <button type="button" title="По убыванию" aria-label="По убыванию" onClick={() => setSortDir('desc')}>
+              <i className="fa-solid fa-arrow-down" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="home-filter-row">
+            <span className="home-filter-icon" title="Поиск">
+              <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
+            </span>
+            <Input
+              value={titleLike}
+              onChange={(e) => setTitleLike(e.target.value)}
+              placeholder="Название"
+            />
+            <Input
+              value={descriptionLike}
+              onChange={(e) => setDescriptionLike(e.target.value)}
+              placeholder="Описание"
+            />
+            <Input
+              type="date"
+              value={exactDate}
+              onChange={(e) => setExactDate(e.target.value)}
+              placeholder="Дата"
+            />
+          </div>
         </div>
       </section>
 
       <section className="card">
         <h2>Группы заметок</h2>
         <p>Сначала выберите группу пользователя, затем откроется список ее заметок.</p>
-        {groups.length > 0 ? renderGroupTree(groups) : <p>Группы пока не созданы</p>}
+        {groups.length > 0 ? (
+          <Tree
+            treeData={groupTreeData}
+            defaultExpandAll
+            selectedKeys={groupId ? [groupId] : []}
+            onSelect={(keys) => {
+              const selected = String(keys[0] ?? '')
+              if (selected) selectGroupAndScroll(selected)
+            }}
+          />
+        ) : (
+          <p>Группы пока не созданы</p>
+        )}
       </section>
 
       <section className="card">
         <h2 id="notes-list">Заметки</h2>
         <div className="row">
           <p>Выбрано для групповых операций: {Object.values(selectedForBulk).filter(Boolean).length}</p>
-          <div className="row">
+          <div className="row" style={{ gap: 8 }}>
             <button type="button" onClick={() => setNoteViewMode('table')} disabled={noteViewMode === 'table'}>Таблица</button>
             <button type="button" onClick={() => setNoteViewMode('tile')} disabled={noteViewMode === 'tile'}>Плитка</button>
           </div>
         </div>
+        <div className="row" style={{ gap: 10, flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+          <Select
+            value={selectedGroupId || undefined}
+            showSearch
+            allowClear
+            placeholder="Группа"
+            optionFilterProp="label"
+            style={{ width: 260 }}
+            onChange={(value) => setSelectedGroupId(value ?? '')}
+            options={groupItems.map((g) => ({
+              value: g.id,
+              label: `${'  '.repeat(g.level)}${g.name}`,
+            }))}
+          />
+          <button
+            type="button"
+            className="bulk-action-btn"
+            onClick={() => void bulkAttachGroup()}
+            title="Назначить группу выбранным заметкам"
+          >
+            <i className="fa-solid fa-folder-plus" aria-hidden="true" />
+            Применить
+          </button>
+          <Select
+            value={bulkTagName || undefined}
+            showSearch
+            allowClear
+            placeholder="Тег"
+            optionFilterProp="label"
+            style={{ width: 260 }}
+            onChange={(value) => setBulkTagName(value ?? '')}
+            onSearch={(value) => setBulkTagName(value)}
+            options={tags.map((t) => ({ value: t.name, label: t.name }))}
+          />
+          <button
+            type="button"
+            className="bulk-action-btn"
+            onClick={() => void bulkAddTag()}
+            title="Назначить тег выбранным заметкам"
+          >
+            <i className="fa-solid fa-tags" aria-hidden="true" />
+            Применить
+          </button>
+          <button
+            type="button"
+            className="bulk-action-btn bulk-delete-btn"
+            onClick={() => void bulkDeleteNotes()}
+            title="Удалить выбранные заметки"
+          >
+            <i className="fa-solid fa-trash" aria-hidden="true" />
+          </button>
+        </div>
         {noteViewMode === 'table' ? (
-          <div className="notes-table-wrap">
-            <table className="notes-table">
-              <thead>
-                <tr>
-                  <th />
-                  <th>Название</th>
-                  <th>Описание</th>
-                  <th>Переход</th>
-                  <th>Публикация</th>
-                  <th>Группы</th>
-                  <th>Теги</th>
-                  <th>Автор</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dashboardNotes.map((n) => (
-                  <tr key={n.id} className={selectedNoteId === n.id ? 'selected-row' : ''} onClick={() => setSelectedNoteId(n.id)}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(selectedForBulk[n.id])}
-                        onChange={() => toggleBulkSelection(n.id)}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </td>
-                    <td>{n.title}</td>
-                    <td>{n.description || 'Без описания'}</td>
-                    <td><Link to={`/notes/${n.id}`} onClick={(e) => e.stopPropagation()}>Открыть</Link></td>
-                    <td>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); void toggleNotePublic(n.id, n.is_public) }}>
-                        {n.is_public ? 'Сделать приватной' : 'Опубликовать'}
-                      </button>
-                    </td>
-                    <td>{n.groups.map((g) => g.name).join(', ') || '-'}</td>
-                    <td>{n.tags.map((t) => t.name).join(', ') || '-'}</td>
-                    <td>{n.author_name || n.owner_id}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table
+            rowKey="id"
+            dataSource={pagedDashboardNotes}
+            columns={notesColumns}
+            pagination={false}
+            size="middle"
+            onRow={(record) => ({
+              onClick: () => setSelectedNoteId(record.id),
+            })}
+            rowClassName={(record) => (record.id === selectedNoteId ? 'selected-row' : '')}
+          />
         ) : (
           <div className="tile-grid">
-            {dashboardNotes.map((n) => (
+            {pagedDashboardNotes.map((n) => (
               <article key={n.id} className="note-tile" onClick={() => setSelectedNoteId(n.id)}>
-                <div className="row">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(selectedForBulk[n.id])}
-                    onChange={() => toggleBulkSelection(n.id)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <strong>{n.title}</strong>
-                </div>
+                <h3 className="note-tile-title">{n.title}</h3>
                 <p>{n.description || 'Без описания'}</p>
                 <p><strong>Группы:</strong> {n.groups.map((g) => g.name).join(', ') || '-'}</p>
                 <p><strong>Теги:</strong> {n.tags.map((t) => t.name).join(', ') || '-'}</p>
                 <p><strong>Автор:</strong> {n.author_name || n.owner_id}</p>
-                <div className="row">
-                  <Link to={`/notes/${n.id}`} onClick={(e) => e.stopPropagation()}>Открыть</Link>
-                  <button type="button" onClick={(e) => { e.stopPropagation(); void toggleNotePublic(n.id, n.is_public) }}>
-                    {n.is_public ? 'Приватная' : 'Опубликовать'}
+                <div className="tile-actions">
+                  <button
+                    type="button"
+                    className="tile-action-btn"
+                    title="Выбрать"
+                    aria-label="Выбрать"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleBulkSelection(n.id)
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={Boolean(selectedForBulk[n.id])}
+                      onChange={() => toggleBulkSelection(n.id)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </button>
+                  <Link
+                    className="tile-action-btn"
+                    to={`/notes/${n.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    title="Редактировать"
+                    aria-label="Редактировать"
+                  >
+                    <i className="fa-solid fa-pen-to-square" aria-hidden="true" />
+                  </Link>
+                  {(() => {
+                    const hint = n.is_public ? 'Сделать приватной' : 'Опубликовать'
+                    return (
+                      <button
+                        type="button"
+                        title={hint}
+                        aria-label={hint}
+                        className={`tile-action-btn ${n.is_public ? 'publish-btn publish-btn-private' : 'publish-btn publish-btn-public'}`}
+                        onClick={(e) => { e.stopPropagation(); void toggleNotePublic(n.id, n.is_public) }}
+                      >
+                        <i className={n.is_public ? 'fa-solid fa-lock' : 'fa-solid fa-globe'} aria-hidden="true" />
+                      </button>
+                    )
+                  })()}
+                  <button
+                    type="button"
+                    className="tile-action-btn"
+                    title="Удалить"
+                    aria-label="Удалить"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void deleteNote(n.id)
+                    }}
+                  >
+                    <i className="fa-solid fa-trash" aria-hidden="true" />
                   </button>
                 </div>
               </article>
             ))}
           </div>
         )}
+        <div className="row" style={{ marginTop: 12 }}>
+          <Select
+            value={notesPageSize}
+            style={{ width: 160 }}
+            options={[
+              { value: 25, label: '25 заметок' },
+              { value: 100, label: '100 заметок' },
+              { value: 500, label: '500 заметок' },
+            ]}
+            onChange={(value) => {
+              setNotesPageSize(value)
+              setNotesPage(1)
+            }}
+          />
+          <Pagination
+            current={notesPage}
+            total={sortedDashboardNotes.length}
+            pageSize={notesPageSize}
+            showSizeChanger={false}
+            onChange={(page) => setNotesPage(page)}
+          />
+        </div>
       </section>
 
       <section className="grid">
@@ -663,7 +914,7 @@ export default function DashboardPage() {
             Привязать существующий тег
             <select value={existingTagName} onChange={(e) => setExistingTagName(e.target.value)}>
               <option value="">Выберите тег</option>
-              {filteredTags.map((t) => (
+              {tags.map((t) => (
                 <option key={t.id} value={t.name}>
                   {t.name}
                 </option>
@@ -713,14 +964,6 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="card">
-        <h2>Публичная заметка</h2>
-        <label>
-          Note ID
-          <input value={publicNoteId} onChange={(e) => setPublicNoteId(e.target.value)} />
-        </label>
-        <button onClick={() => void makePublicRead()}>Сделать заметку публичной</button>
-      </section>
     </main>
   )
 }

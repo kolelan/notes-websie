@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import axios from 'axios'
+import { Tree } from 'antd'
+import type { TreeDataNode } from 'antd'
 import { api, setAuthToken } from '../lib/api'
 import { readSession } from '../lib/auth'
 import type { ApiEnvelope, Group, Note } from '../types/api'
@@ -32,76 +34,28 @@ export default function NoteDetailsPage() {
   const [attachedGroupIds, setAttachedGroupIds] = useState<string[]>([])
   const [attachedTags, setAttachedTags] = useState<Array<{ id: string; name: string }>>([])
   const [tagInput, setTagInput] = useState('')
-  const [expandedGroupIds, setExpandedGroupIds] = useState<Record<string, boolean>>({})
+  const [expandedGroupIds, setExpandedGroupIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
   const canEdit = Boolean(isAuthenticated && note && currentUserId && note.owner_id === currentUserId)
 
-  function flattenGroups(items: Group[], level = 0): Array<{ id: string; name: string; level: number }> {
-    const result: Array<{ id: string; name: string; level: number }> = []
-    for (const item of items) {
-      result.push({ id: item.id, name: item.name, level })
-      if (item.children?.length) result.push(...flattenGroups(item.children, level + 1))
-    }
-    return result
+  function collectAllGroupIds(items: Group[]): string[] {
+    return items.flatMap((item) => [item.id, ...(item.children?.length ? collectAllGroupIds(item.children) : [])])
   }
 
-  function toggleGroupExpanded(groupId: string) {
-    setExpandedGroupIds((prev) => ({
-      ...prev,
-      [groupId]: !prev[groupId],
+  function toTreeData(items: Group[]): TreeDataNode[] {
+    return items.map((group) => ({
+      key: group.id,
+      title: (
+        <span>
+          {group.name}
+          {attachedGroupIds.includes(group.id) ? ' (привязана)' : ''}
+        </span>
+      ),
+      children: group.children?.length ? toTreeData(group.children) : undefined,
     }))
-  }
-
-  function toggleGroupChecked(groupId: string, checked: boolean) {
-    setSelectedGroupIds((prev) => ({
-      ...prev,
-      [groupId]: checked,
-    }))
-  }
-
-  function renderGroupPickerTree(items: Group[], level = 0) {
-    return (
-      <ul className="group-tree">
-        {items.map((group) => {
-          const hasChildren = Boolean(group.children?.length)
-          const isExpanded = expandedGroupIds[group.id] ?? true
-          const isChecked = Boolean(selectedGroupIds[group.id])
-          const wasAttached = attachedGroupIds.includes(group.id)
-          return (
-            <li key={group.id} style={{ marginLeft: `${level * 12}px` }}>
-              <div className="group-row">
-                {hasChildren ? (
-                  <button
-                    type="button"
-                    className="tree-toggle"
-                    onClick={() => toggleGroupExpanded(group.id)}
-                    disabled={!canEdit}
-                  >
-                    {isExpanded ? '▾' : '▸'}
-                  </button>
-                ) : (
-                  <span className="tree-toggle-placeholder">•</span>
-                )}
-                <label className="group-checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={(e) => toggleGroupChecked(group.id, e.target.checked)}
-                    disabled={!canEdit}
-                  />
-                  <span className="group-name">{group.name}</span>
-                </label>
-                {wasAttached && <span className="group-count">(привязана)</span>}
-              </div>
-              {hasChildren && isExpanded ? renderGroupPickerTree(group.children ?? [], level + 1) : null}
-            </li>
-          )
-        })}
-      </ul>
-    )
   }
 
   useEffect(() => {
@@ -138,12 +92,14 @@ export default function NoteDetailsPage() {
           const initialTags = noteOverview?.tags ?? []
           setAttachedGroupIds(initialAttachedIds)
           setSelectedGroupIds(Object.fromEntries(initialAttachedIds.map((id) => [id, true])))
+          setExpandedGroupIds(collectAllGroupIds(groupsRes.data.data))
           setAttachedTags(initialTags)
           setTagInput(initialTags.map((t) => t.name).join(' '))
         } else {
           setGroups([])
           setAttachedGroupIds([])
           setSelectedGroupIds({})
+          setExpandedGroupIds([])
           setAttachedTags([])
           setTagInput('')
         }
@@ -313,6 +269,8 @@ export default function NoteDetailsPage() {
 
   if (loading) return <main className="page">Загрузка заметки...</main>
   const checkedCount = Object.values(selectedGroupIds).filter(Boolean).length
+  const checkedKeys = Object.entries(selectedGroupIds).filter(([, checked]) => checked).map(([id]) => id)
+  const treeData = toTreeData(groups)
 
   return (
     <main className="page">
@@ -383,7 +341,20 @@ export default function NoteDetailsPage() {
               Группы заметки
               {groups.length > 0 ? (
                 <div>
-                  {renderGroupPickerTree(groups)}
+                  <Tree
+                    checkable
+                    checkedKeys={checkedKeys}
+                    expandedKeys={expandedGroupIds}
+                    onExpand={(keys) => setExpandedGroupIds(keys.map(String))}
+                    onCheck={(keys) => {
+                      const checked = Array.isArray(keys) ? keys : keys.checked
+                      const nextSelected = Object.fromEntries(checked.map((key) => [String(key), true]))
+                      setSelectedGroupIds(nextSelected)
+                    }}
+                    treeData={treeData}
+                    selectable={false}
+                    disabled={!canEdit}
+                  />
                   <p className="muted">Отмечено групп: {checkedCount}</p>
                 </div>
               ) : (

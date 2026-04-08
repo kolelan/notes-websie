@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Menu, Table } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
 import { api, setAuthToken } from '../lib/api'
 import { readSession } from '../lib/auth'
 import { useActionStatus } from '../hooks/useActionStatus'
@@ -114,15 +116,56 @@ export default function AdminUsersPage() {
     }
   }
 
+  const columns: ColumnsType<AdminUser> = [
+    { title: 'Email', dataIndex: 'email', key: 'email' },
+    { title: 'Имя', dataIndex: 'name', key: 'name' },
+    {
+      title: 'Роль',
+      key: 'role',
+      render: (_, u) => (
+        <select
+          value={u.role}
+          disabled={savingAction !== ''}
+          onChange={(e) => void changeRole(u.id, e.target.value as AdminUser['role'])}
+        >
+          <option value="user">user</option>
+          <option value="admin">admin</option>
+          <option value="superadmin">superadmin</option>
+        </select>
+      ),
+    },
+    {
+      title: 'Статус',
+      key: 'status',
+      render: (_, u) => (
+        <button disabled={savingAction !== ''} onClick={() => void toggleActive(u.id, u.is_active)}>
+          {u.is_active ? 'Активен' : 'Заблокирован'}
+        </button>
+      ),
+    },
+    {
+      title: 'Сессии',
+      key: 'sessions',
+      render: (_, u) => (
+        <button disabled={savingAction !== ''} onClick={() => void logoutAll(u.id)}>Logout all</button>
+      ),
+    },
+  ]
+
   return (
     <main className="page">
       <header className="row">
         <h1>Admin: Users</h1>
-        <div className="row">
-          <Link to="/admin/settings">Settings</Link>
-          <Link to="/admin/audit">Audit</Link>
-          <Link to="/dashboard">Dashboard</Link>
-        </div>
+        <Menu
+          mode="horizontal"
+          selectedKeys={['users']}
+          items={[
+            { key: 'users', label: <Link to="/admin/users">Users</Link> },
+            { key: 'settings', label: <Link to="/admin/settings">Settings</Link> },
+            { key: 'audit', label: <Link to="/admin/audit">Audit</Link> },
+            { key: 'dashboard', label: <Link to="/dashboard">Dashboard</Link> },
+          ]}
+        />
       </header>
       <section className="card">
         <div className="compact-filters-row">
@@ -158,45 +201,14 @@ export default function AdminUsersPage() {
       {loading ? (
         <p>Загрузка...</p>
       ) : (
-        <section className="card notes-table-wrap">
-          <table className="notes-table">
-            <thead>
-              <tr>
-                <th>Email</th>
-                <th>Имя</th>
-                <th>Роль</th>
-                <th>Статус</th>
-                <th>Сессии</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.email}</td>
-                  <td>{u.name}</td>
-                  <td>
-                    <select
-                      value={u.role}
-                      disabled={savingAction !== ''}
-                      onChange={(e) => void changeRole(u.id, e.target.value as AdminUser['role'])}
-                    >
-                      <option value="user">user</option>
-                      <option value="admin">admin</option>
-                      <option value="superadmin">superadmin</option>
-                    </select>
-                  </td>
-                  <td>
-                    <button disabled={savingAction !== ''} onClick={() => void toggleActive(u.id, u.is_active)}>
-                      {u.is_active ? 'Активен' : 'Заблокирован'}
-                    </button>
-                  </td>
-                  <td>
-                    <button disabled={savingAction !== ''} onClick={() => void logoutAll(u.id)}>Logout all</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <section className="card">
+          <Table
+            rowKey="id"
+            dataSource={users}
+            columns={columns}
+            pagination={false}
+            size="middle"
+          />
         </section>
       )}
       {!loading && pages > 1 && (

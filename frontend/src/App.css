@@ -153,6 +153,38 @@ li.selected {
   gap: 10px;
 }
 
+.home-filters-row {
+  grid-template-columns: repeat(4, minmax(170px, 1fr));
+  align-items: end;
+}
+
+.home-filters-actions {
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.home-filter-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.home-filter-row {
+  display: grid;
+  grid-template-columns: 28px minmax(180px, 240px) minmax(180px, 1fr) minmax(180px, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.home-filter-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
 .compact-filters-row label {
   margin-bottom: 0;
 }
@@ -189,10 +221,78 @@ li.selected {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.note-tile-title {
+  margin: 0;
+  width: 100%;
+}
+
+.tile-actions {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(38px, 1fr));
+  gap: 8px;
+}
+
+.tile-action-btn {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.tile-action-btn i {
+  font-size: 14px;
+}
+
+.tile-action-btn input[type='checkbox'] {
+  margin: 0;
+}
+
+.bulk-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 400;
+  background: #fafafa;
+  border-color: #d9d9d9;
+  color: #555;
+}
+
+.bulk-delete-btn {
+  background: #f5f5f5;
+  border-color: #c8c8c8;
+  color: #595959;
 }
 
 .muted {
   color: var(--color-text-muted);
+}
+
+.publish-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.publish-btn-public {
+  background: #e8f7ed;
+  border-color: #7acb91;
+  color: #146c2e;
+}
+
+.publish-btn-private {
+  background: #fff1f0;
+  border-color: #ffa39e;
+  color: #a8071a;
 }
 
 .home-header h1 {
@@ -203,6 +303,10 @@ li.selected {
   background: var(--color-surface-accent);
 }
 
+.pagination-card {
+  margin-top: 16px;
+}
+
 @media (max-width: 800px) {
   .grid {
     grid-template-columns: 1fr;
@@ -210,5 +314,17 @@ li.selected {
 
   .compact-filters-row {
     grid-template-columns: 1fr;
+  }
+
+  .home-filters-row {
+    grid-template-columns: 1fr;
+  }
+
+  .home-filters-actions {
+    justify-content: flex-start;
+  }
+
+  .home-filter-row {
+    grid-template-columns: 24px 1fr;
   }
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Alert, Button, Card, Input } from 'antd'
 import { api, setAuthToken } from '../lib/api'
 import { writeSession } from '../lib/auth'
 import type { ApiEnvelope, AuthPayload } from '../types/api'
@@ -36,21 +37,25 @@ export default function RegisterPage() {
   return (
     <main className="page">
       <h1>Регистрация</h1>
-      <form className="card" onSubmit={onSubmit}>
+      <form onSubmit={onSubmit}>
+        <Card className="card">
         <label>
           Имя
-          <input value={name} onChange={(e) => setName(e.target.value)} />
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <label>
           Email
-          <input value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
         <label>
           Пароль
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Input.Password value={password} onChange={(e) => setPassword(e.target.value)} />
         </label>
-        {error && <p className="error">{error}</p>}
-        <button disabled={loading}>{loading ? 'Создаем...' : 'Зарегистрироваться'}</button>
+        {error && <Alert type="error" message={error} showIcon />}
+        <Button type="primary" htmlType="submit" loading={loading}>
+          {loading ? 'Создаем...' : 'Зарегистрироваться'}
+        </Button>
+        </Card>
       </form>
       <p>
         Уже есть аккаунт? <Link to="/login">Войти</Link>

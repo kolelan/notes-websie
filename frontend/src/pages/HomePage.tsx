@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { api } from '../lib/api'
+import { Link, useNavigate } from 'react-router-dom'
+import { Alert, Button, Card, Input, Menu, Pagination, Select, Table } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
+import { api, setAuthToken } from '../lib/api'
+import { readSession, writeSession } from '../lib/auth'
 import type { ApiEnvelope } from '../types/api'
 
 type PublicNote = {
@@ -25,6 +28,8 @@ type TagOption = { id: string; name: string; notes_count: number }
 type GroupOption = { id: string; name: string; notes_count: number }
 
 export default function HomePage() {
+  const navigate = useNavigate()
+  const hasSession = Boolean(readSession())
   const [notes, setNotes] = useState<PublicNote[]>([])
   const [authors, setAuthors] = useState<AuthorOption[]>([])
   const [tags, setTags] = useState<TagOption[]>([])
@@ -36,10 +41,27 @@ export default function HomePage() {
   const [descriptionLike, setDescriptionLike] = useState('')
   const [sortBy, setSortBy] = useState<'published_at' | 'title' | 'author'>('published_at')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [noteViewMode, setNoteViewMode] = useState<'tile' | 'table'>('tile')
   const [page, setPage] = useState(1)
-  const [pages, setPages] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  async function onLogout() {
+    const session = readSession()
+    if (session) {
+      setAuthToken(session.accessToken)
+      try {
+        await api.post('/auth/logout', { refresh_token: session.refreshToken })
+      } catch {
+        // ignore
+      }
+    }
+    writeSession(null)
+    setAuthToken(null)
+    navigate('/')
+  }
 
   const filterParams = useMemo(
     () => ({
@@ -75,12 +97,12 @@ export default function HomePage() {
         params: {
           ...filterParams,
           page: targetPage,
-          limit: 12,
+          limit: pageSize,
         },
       })
       setNotes(res.data.data)
       setPage(res.data.meta?.page ?? targetPage)
-      setPages(res.data.meta?.pages ?? 1)
+      setTotal(res.data.meta?.total ?? res.data.data.length)
     } catch {
       setError('Не удалось загрузить опубликованные заметки.')
     } finally {
@@ -96,7 +118,33 @@ export default function HomePage() {
   useEffect(() => {
     void loadNotes(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterParams])
+  }, [filterParams, pageSize])
+
+  const columns: ColumnsType<PublicNote> = [
+    { title: 'Название', dataIndex: 'title', key: 'title' },
+    {
+      title: 'Описание',
+      key: 'description',
+      render: (_, note) => note.description || 'Без описания',
+    },
+    { title: 'Автор', dataIndex: 'author_name', key: 'author_name' },
+    { title: 'Опубликовано', dataIndex: 'published_at', key: 'published_at' },
+    {
+      title: 'Группы',
+      key: 'groups',
+      render: (_, note) => note.groups.map((g) => g.name).join(', ') || '-',
+    },
+    {
+      title: 'Теги',
+      key: 'tags',
+      render: (_, note) => note.tags.map((t) => t.name).join(', ') || '-',
+    },
+    {
+      title: '',
+      key: 'open',
+      render: (_, note) => <Link to={`/notes/${note.id}`}>Открыть</Link>,
+    },
+  ]
 
   return (
     <main className="page">
@@ -105,11 +153,29 @@ export default function HomePage() {
           <h1>Notes Website</h1>
           <p className="muted">Ваши заметки, группы и совместная работа</p>
         </div>
-        <div className="row">
-          <Link to="/login">Войти</Link>
-          <Link to="/register">Регистрация</Link>
-          <Link to="/profile">Профиль</Link>
-        </div>
+        {hasSession ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+            <Button type="default">
+              <Link to="/dashboard">Dashboard</Link>
+            </Button>
+            <Button type="default">
+              <Link to="/profile">Профиль</Link>
+            </Button>
+            <Button type="default" onClick={() => void onLogout()}>
+              Выйти
+            </Button>
+          </div>
+        ) : (
+          <Menu
+            mode="horizontal"
+            selectable={false}
+            items={[
+              { key: 'login', label: <Link to="/login">Войти</Link> },
+              { key: 'register', label: <Link to="/register">Регистрация</Link> },
+              { key: 'profile', label: <Link to="/profile">Профиль</Link> },
+            ]}
+          />
+        )}
       </header>
 
       <section className="card hero">
@@ -117,71 +183,91 @@ export default function HomePage() {
         <p>Иерархия групп, теги, публикация заметок и удобный поиск по публичной базе.</p>
       </section>
 
-      <section className="card">
+      <Card className="card">
         <h2>Опубликованные заметки</h2>
-        <div className="compact-filters-row">
-          <label>
-            Автор
-            <select value={authorId} onChange={(e) => setAuthorId(e.target.value)}>
-              <option value="">Все авторы</option>
-              {authors.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} ({a.notes_count})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Группа автора
-            <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-              <option value="">Все группы</option>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name} ({g.notes_count})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Тег
-            <select value={tagId} onChange={(e) => setTagId(e.target.value)}>
-              <option value="">Все теги</option>
-              {tags.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({t.notes_count})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Название содержит
-            <input value={titleLike} onChange={(e) => setTitleLike(e.target.value)} />
-          </label>
-          <label>
-            Описание содержит
-            <input value={descriptionLike} onChange={(e) => setDescriptionLike(e.target.value)} />
-          </label>
-          <label>
-            Сортировка
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'published_at' | 'title' | 'author')}>
-              <option value="published_at">Дата публикации</option>
-              <option value="title">Название</option>
-              <option value="author">Автор</option>
-            </select>
-          </label>
+        <div className="home-filter-block">
+          <div className="home-filter-row">
+            <span className="home-filter-icon" title="Фильтрация">
+              <i className="fa-solid fa-filter" aria-hidden="true" />
+            </span>
+            <Select
+              value={authorId || undefined}
+              allowClear
+              placeholder="Автор"
+              onChange={(value) => setAuthorId(value ?? '')}
+              options={authors.map((a) => ({ value: a.id, label: `${a.name} (${a.notes_count})` }))}
+              style={{ minWidth: 220 }}
+            />
+            <Select
+              value={groupId || undefined}
+              allowClear
+              placeholder="Группа"
+              onChange={(value) => setGroupId(value ?? '')}
+              options={groups.map((g) => ({ value: g.id, label: `${g.name} (${g.notes_count})` }))}
+              style={{ minWidth: 220 }}
+            />
+            <Select
+              value={tagId || undefined}
+              allowClear
+              placeholder="Тег"
+              onChange={(value) => setTagId(value ?? '')}
+              options={tags.map((t) => ({ value: t.id, label: `${t.name} (${t.notes_count})` }))}
+              style={{ minWidth: 220 }}
+            />
+          </div>
+          <div className="home-filter-row">
+            <span className="home-filter-icon" title="Сортировка">
+              <i className="fa-solid fa-sort" aria-hidden="true" />
+            </span>
+            <Select
+              value={sortBy}
+              onChange={(value) => setSortBy(value)}
+              options={[
+                { value: 'published_at', label: 'Дата публикации' },
+                { value: 'title', label: 'Название' },
+                { value: 'author', label: 'Автор' },
+              ]}
+              style={{ minWidth: 220 }}
+            />
+            <Button
+              title="По возрастанию"
+              aria-label="По возрастанию"
+              type={sortDir === 'asc' ? 'primary' : 'default'}
+              onClick={() => setSortDir('asc')}
+            >
+              <i className="fa-solid fa-arrow-up" aria-hidden="true" />
+            </Button>
+            <Button
+              title="По убыванию"
+              aria-label="По убыванию"
+              type={sortDir === 'desc' ? 'primary' : 'default'}
+              onClick={() => setSortDir('desc')}
+            >
+              <i className="fa-solid fa-arrow-down" aria-hidden="true" />
+            </Button>
+          </div>
+          <div className="home-filter-row">
+            <span className="home-filter-icon" title="Поиск">
+              <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
+            </span>
+            <Input
+              value={titleLike}
+              onChange={(e) => setTitleLike(e.target.value)}
+              placeholder="Название"
+            />
+            <Input
+              value={descriptionLike}
+              onChange={(e) => setDescriptionLike(e.target.value)}
+              placeholder="Описание"
+            />
+          </div>
         </div>
-        <div className="row">
-          <button onClick={() => setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))}>
-            Направление: {sortDir.toUpperCase()}
-          </button>
-          <button onClick={() => void loadNotes(1)}>Обновить</button>
-        </div>
-      </section>
+      </Card>
 
-      {error && <p className="error">{error}</p>}
+      {error && <Alert type="error" message={error} showIcon style={{ marginBottom: 12 }} />}
       {loading ? (
         <p>Загрузка...</p>
-      ) : (
+      ) : noteViewMode === 'tile' ? (
         <section className="tile-grid">
           {notes.map((note) => (
             <article key={note.id} className="note-tile">
@@ -195,13 +281,45 @@ export default function HomePage() {
             </article>
           ))}
         </section>
+      ) : (
+        <Card className="card">
+          <Table
+            rowKey="id"
+            dataSource={notes}
+            columns={columns}
+            pagination={false}
+          />
+        </Card>
       )}
 
-      <section className="card row">
-        <button disabled={page <= 1} onClick={() => void loadNotes(page - 1)}>Назад</button>
-        <span>Страница {page} из {pages}</span>
-        <button disabled={page >= pages} onClick={() => void loadNotes(page + 1)}>Вперед</button>
-      </section>
+      <Card className="card pagination-card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <Pagination
+            current={page}
+            total={total}
+            pageSize={pageSize}
+            onChange={(p, size) => {
+              if (size !== pageSize) {
+                setPageSize(size)
+                setPage(1)
+                return
+              }
+              void loadNotes(p)
+            }}
+            showSizeChanger
+            pageSizeOptions={[10, 25, 50]}
+            size="small"
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Button size="small" type={noteViewMode === 'table' ? 'primary' : 'default'} onClick={() => setNoteViewMode('table')}>
+              Таблица
+            </Button>
+            <Button size="small" type={noteViewMode === 'tile' ? 'primary' : 'default'} onClick={() => setNoteViewMode('tile')}>
+              Плитка
+            </Button>
+          </div>
+        </div>
+      </Card>
 
       <footer className="card muted">
         Notes Website MVP. Публичные заметки, группировка и поиск.
