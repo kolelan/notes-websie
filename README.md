@@ -81,6 +81,7 @@
 - `POST /auth/login` (email/password, выдает access/refresh)
 - `POST /auth/refresh` (обновление пары токенов)
 - `POST /auth/logout` (отзыв refresh token)
+- `POST /auth/logout-all` (отзыв всех refresh token текущего пользователя)
 
 ### Groups
 - `GET /groups`
@@ -119,6 +120,11 @@
 - Rate limiting:
   - до `100` запросов/мин на пользователя;
   - до `20` запросов/мин на создание заметок.
+- В текущем MVP включен базовый rate limit:
+  - `/auth/login` - 20 запросов/мин;
+  - `/auth/register` - 10 запросов/мин;
+  - `POST /notes` - 20 запросов/мин.
+- Для каждого запроса добавляется `X-Request-Id`, и пишется audit лог в stdout/error log.
 - CSRF-защита для stateful-операций.
 - XSS-митигации (экранирование + CSP).
 - SQL-инъекции предотвращаются параметризованными запросами/ORM.

@@ -10,6 +10,8 @@ use App\Http\Controller\GroupController;
 use App\Http\Controller\NoteController;
 use App\Http\Controller\PermissionController;
 use App\Http\Middleware\AuthMiddleware;
+use App\Http\Middleware\RateLimitMiddleware;
+use App\Http\Middleware\RequestContextMiddleware;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Factory\AppFactory;
@@ -19,6 +21,7 @@ require __DIR__ . '/../src/Config/bootstrap.php';
 
 $app = AppFactory::create();
 $app->addBodyParsingMiddleware();
+$app->add(new RequestContextMiddleware());
 
 $pdo = PdoFactory::createFromEnv();
 $permissionService = new PermissionService($pdo);
@@ -34,17 +37,19 @@ $app->get('/health', static function (Request $request, Response $response): Res
     return $response->withHeader('Content-Type', 'application/json');
 });
 
-$app->post('/auth/login', [$authController, 'login']);
-$app->post('/auth/register', [$authController, 'register']);
 $app->post('/auth/refresh', [$authController, 'refresh']);
 $app->post('/auth/logout', [$authController, 'logout']);
+$app->post('/auth/logout-all', [$authController, 'logoutAll'])->add($authMiddleware);
+
+$app->post('/auth/login', [$authController, 'login'])->add(new RateLimitMiddleware(20, 60));
+$app->post('/auth/register', [$authController, 'register'])->add(new RateLimitMiddleware(10, 60));
 
 $app->get('/public/notes/{id}', [$noteController, 'publicShow']);
 
 $app->group('', function ($group) use ($noteController, $groupController, $permissionController): void {
     $group->get('/notes', [$noteController, 'list']);
     $group->get('/notes/{id}', [$noteController, 'show']);
-    $group->post('/notes', [$noteController, 'create']);
+    $group->post('/notes', [$noteController, 'create'])->add(new RateLimitMiddleware(20, 60));
     $group->put('/notes/{id}', [$noteController, 'update']);
     $group->delete('/notes/{id}', [$noteController, 'delete']);
     $group->post('/notes/{id}/attach-to-group', [$noteController, 'attachToGroup']);

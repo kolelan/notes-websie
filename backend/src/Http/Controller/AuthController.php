@@ -164,6 +164,23 @@ final class AuthController
         return $this->json($response, ['data' => ['ok' => true]]);
     }
 
+    public function logoutAll(Request $request, Response $response): Response
+    {
+        $userId = (string)$request->getAttribute('user_id', '');
+        if ($userId === '') {
+            return $this->json($response, ['error' => 'Unauthorized'], 401);
+        }
+
+        $stmt = $this->pdo->prepare(
+            'UPDATE refresh_token
+             SET revoked_at = NOW()
+             WHERE user_id = :user_id AND revoked_at IS NULL'
+        );
+        $stmt->execute(['user_id' => $userId]);
+
+        return $this->json($response, ['data' => ['ok' => true, 'revoked' => $stmt->rowCount()]]);
+    }
+
     private function json(Response $response, array $payload, int $status = 200): Response
     {
         $response->getBody()->write((string)json_encode($payload, JSON_UNESCAPED_UNICODE));
