@@ -77,6 +77,7 @@
 ## Основные API-эндпоинты (черновой набор)
 
 ### Auth
+- `POST /auth/register` (email/name/password, выдает access/refresh)
 - `POST /auth/login` (email/password, выдает access/refresh)
 - `POST /auth/refresh` (обновление пары токенов)
 - `POST /auth/logout` (отзыв refresh token)
@@ -87,8 +88,8 @@
 - `GET /groups/{id}`
 - `PUT /groups/{id}`
 - `DELETE /groups/{id}`
-- `POST /groups/{id}/invite` (planned)
-- `POST /groups/{id}/accept-invite` (planned)
+- `POST /groups/{id}/invite` (`invitee_email`, `role`, `expires_in`)
+- `POST /groups/{id}/accept-invite` (`token`)
 
 ### Notes
 - `GET /notes?group_id=&tag_id=` (`group_id` уже поддержан)

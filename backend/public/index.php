@@ -25,7 +25,7 @@ $permissionService = new PermissionService($pdo);
 $jwtService = new JwtService();
 $authController = new AuthController($pdo, $jwtService);
 $noteController = new NoteController($pdo, $permissionService);
-$groupController = new GroupController($pdo);
+$groupController = new GroupController($pdo, $permissionService);
 $permissionController = new PermissionController($pdo, $permissionService);
 $authMiddleware = new AuthMiddleware($jwtService);
 
@@ -35,6 +35,7 @@ $app->get('/health', static function (Request $request, Response $response): Res
 });
 
 $app->post('/auth/login', [$authController, 'login']);
+$app->post('/auth/register', [$authController, 'register']);
 $app->post('/auth/refresh', [$authController, 'refresh']);
 $app->post('/auth/logout', [$authController, 'logout']);
 
@@ -57,6 +58,8 @@ $app->group('', function ($group) use ($noteController, $groupController, $permi
     $group->post('/groups', [$groupController, 'create']);
     $group->put('/groups/{id}', [$groupController, 'update']);
     $group->delete('/groups/{id}', [$groupController, 'delete']);
+    $group->post('/groups/{id}/invite', [$groupController, 'invite']);
+    $group->post('/groups/{id}/accept-invite', [$groupController, 'acceptInvite']);
     $group->get('/permissions/target/{type}/{id}', [$permissionController, 'listForTarget']);
     $group->post('/permissions', [$permissionController, 'create']);
     $group->delete('/permissions/{id}', [$permissionController, 'delete']);

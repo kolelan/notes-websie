@@ -35,6 +35,15 @@ final class PermissionService
         return $stmt->fetchColumn() !== false;
     }
 
+    public function canReadGroup(?string $userId, string $groupId): bool
+    {
+        if ($userId !== null && $this->isGroupOwner($userId, $groupId)) {
+            return true;
+        }
+
+        return $this->hasPermission('group', $groupId, $userId, 'can_read');
+    }
+
     private function hasPermission(string $targetType, string $targetId, ?string $userId, string $flagColumn): bool
     {
         // public read

@@ -41,27 +41,54 @@ final class AuthController
             return $this->json($response, ['error' => 'Invalid credentials'], 401);
         }
 
-        $accessToken = $this->jwtService->issueAccessToken((string)$user['id'], (string)$user['role']);
-        $refresh = $this->jwtService->issueRefreshToken((string)$user['id']);
-        $refreshToken = $refresh['token'];
-        $expiresAt = (int)$refresh['expires_at'];
+        return $this->issueTokensResponse($response, (string)$user['id'], (string)$user['role']);
+    }
 
-        $insert = $this->pdo->prepare(
-            'INSERT INTO refresh_token (user_id, token, expires_at) VALUES (:user_id, :token, TO_TIMESTAMP(:expires_at))'
+    public function register(Request $request, Response $response): Response
+    {
+        $payload = (array)$request->getParsedBody();
+        $email = trim((string)($payload['email'] ?? ''));
+        $name = trim((string)($payload['name'] ?? ''));
+        $password = (string)($payload['password'] ?? '');
+
+        if ($email === '' || $name === '' || $password === '') {
+            return $this->json($response, ['error' => 'Fields email, name and password are required'], 422);
+        }
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return $this->json($response, ['error' => 'Invalid email'], 422);
+        }
+        if (mb_strlen($password) < 8) {
+            return $this->json($response, ['error' => 'Password must be at least 8 characters'], 422);
+        }
+
+        $passwordHash = password_hash($password, PASSWORD_BCRYPT);
+        if ($passwordHash === false) {
+            return $this->json($response, ['error' => 'Failed to hash password'], 500);
+        }
+
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO "user" (email, name, password_hash, role, is_active)
+             VALUES (:email, :name, :password_hash, :role, TRUE)
+             RETURNING id, role'
         );
-        $insert->execute([
-            'user_id' => $user['id'],
-            'token' => $refreshToken,
-            'expires_at' => $expiresAt,
-        ]);
 
-        return $this->json($response, [
-            'data' => [
-                'access_token' => $accessToken,
-                'refresh_token' => $refreshToken,
-                'token_type' => 'Bearer',
-            ],
-        ]);
+        try {
+            $stmt->execute([
+                'email' => $email,
+                'name' => $name,
+                'password_hash' => $passwordHash,
+                'role' => 'user',
+            ]);
+        } catch (\Throwable) {
+            return $this->json($response, ['error' => 'Email already registered'], 409);
+        }
+
+        $row = $stmt->fetch();
+        if ($row === false) {
+            return $this->json($response, ['error' => 'Failed to create user'], 500);
+        }
+
+        return $this->issueTokensResponse($response, (string)$row['id'], (string)$row['role'], 201);
     }
 
     public function refresh(Request $request, Response $response): Response
@@ -141,5 +168,28 @@ final class AuthController
     {
         $response->getBody()->write((string)json_encode($payload, JSON_UNESCAPED_UNICODE));
         return $response->withStatus($status)->withHeader('Content-Type', 'application/json');
+    }
+
+    private function issueTokensResponse(Response $response, string $userId, string $role, int $status = 200): Response
+    {
+        $accessToken = $this->jwtService->issueAccessToken($userId, $role);
+        $refresh = $this->jwtService->issueRefreshToken($userId);
+
+        $insert = $this->pdo->prepare(
+            'INSERT INTO refresh_token (user_id, token, expires_at) VALUES (:user_id, :token, TO_TIMESTAMP(:expires_at))'
+        );
+        $insert->execute([
+            'user_id' => $userId,
+            'token' => $refresh['token'],
+            'expires_at' => (int)$refresh['expires_at'],
+        ]);
+
+        return $this->json($response, [
+            'data' => [
+                'access_token' => $accessToken,
+                'refresh_token' => $refresh['token'],
+                'token_type' => 'Bearer',
+            ],
+        ], $status);
     }
 }
