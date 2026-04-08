@@ -188,6 +188,22 @@
 - `make migrate`
 - `make superadmin`
 
+## Frontend (MVP старт)
+
+1. Перейдите в `frontend`:
+   - `cd frontend`
+2. Установите зависимости:
+   - `npm install`
+3. Создайте env:
+   - скопируйте `frontend/.env.example` в `frontend/.env`
+4. Запустите dev-сервер:
+   - `npm run dev`
+
+Текущие экраны:
+- `Login` (`/`)
+- `Register` (`/register`)
+- `Dashboard` (`/dashboard`) с группами и заметками из backend API.
+
 ## Структура проекта (текущий инкремент)
 
 - `backend/public/index.php` - точка входа Slim.
