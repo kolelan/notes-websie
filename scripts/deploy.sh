@@ -38,9 +38,13 @@ echo "Running remote deployment steps..."
 ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "cd '$REMOTE_RELEASE/backend' \
   && composer install --no-dev --optimize-autoloader \
   && ln -sfn '$REMOTE_SHARED_ENV' .env \
+  && grep -q '^REDIS_HOST=' .env \
+  && grep -q '^REDIS_PORT=' .env \
   && php vendor/bin/phinx migrate -e production \
   && php bin/console create:superadmin \
   && ln -sfn '$REMOTE_RELEASE' '$REMOTE_CURRENT'"
 
 echo "Deployment finished. Run health check manually:"
 echo "curl -f https://site-name.ru/health"
+echo "Also verify Redis connectivity from app server:"
+echo "php -r 'require \"vendor/autoload.php\"; require \"src/Config/bootstrap.php\"; \$c = App\\\\Cache\\\\RedisFactory::createFromEnv(); var_dump(\$c->ping());'"

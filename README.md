@@ -124,6 +124,7 @@
   - `/auth/login` - 20 запросов/мин;
   - `/auth/register` - 10 запросов/мин;
   - `POST /notes` - 20 запросов/мин.
+- Хранилище лимитов: Redis (`REDIS_HOST`, `REDIS_PORT`).
 - Для каждого запроса добавляется `X-Request-Id`, и пишется audit лог в stdout/error log.
 - CSRF-защита для stateful-операций.
 - XSS-митигации (экранирование + CSP).
@@ -205,12 +206,14 @@
 ## Production (MVP)
 
 - На сервере: `nginx + php-fpm + postgres`.
+- Для rate-limit требуется Redis (отдельный сервис).
 - Публичный путь: `/var/www/site-name.ru/web`.
 - Деплой скриптом:
   - Bash: `./scripts/deploy.sh <host> <user> [port]`
   - PowerShell: `.\scripts\deploy.ps1 -SshHost <host> -SshUser <user> -SshPort 22`
 - В рамках деплоя выполняются:
   - `composer install --no-dev --optimize-autoloader`;
+  - preflight-проверка `REDIS_HOST`/`REDIS_PORT` в серверном `.env`;
   - `phinx migrate -e production`;
   - `create:superadmin`.
 

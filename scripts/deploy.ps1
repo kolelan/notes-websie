@@ -22,11 +22,13 @@ rsync -az --delete `
   --exclude ".idea" `
   --exclude "backend/vendor" `
   -e "ssh -p $SshPort" `
-  ./ "$SshUser@$SshHost:$remoteRelease/"
+  ./ "$SshUser@${SshHost}:$remoteRelease/"
 
 Write-Host "Running remote deployment steps..."
-$remoteCmd = "cd '$remoteRelease/backend' && composer install --no-dev --optimize-autoloader && ln -sfn '$remoteSharedEnv' .env && php vendor/bin/phinx migrate -e production && php bin/console create:superadmin && ln -sfn '$remoteRelease' '$remoteCurrent'"
+$remoteCmd = "cd '$remoteRelease/backend' && composer install --no-dev --optimize-autoloader && ln -sfn '$remoteSharedEnv' .env && grep -q '^REDIS_HOST=' .env && grep -q '^REDIS_PORT=' .env && php vendor/bin/phinx migrate -e production && php bin/console create:superadmin && ln -sfn '$remoteRelease' '$remoteCurrent'"
 ssh -p $SshPort "$SshUser@$SshHost" $remoteCmd
 
 Write-Host "Deployment finished. Run health check manually:"
 Write-Host "curl -f https://site-name.ru/health"
+Write-Host "Also verify Redis connectivity from app server:"
+Write-Host "php -r 'require ""vendor/autoload.php""; require ""src/Config/bootstrap.php""; `$c = App\\Cache\\RedisFactory::createFromEnv(); var_dump(`$c->ping());'"

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Database\PdoFactory;
 use App\Auth\JwtService;
 use App\Acl\PermissionService;
+use App\Cache\RedisFactory;
 use App\Http\Controller\AuthController;
 use App\Http\Controller\GroupController;
 use App\Http\Controller\NoteController;
@@ -24,6 +25,7 @@ $app->addBodyParsingMiddleware();
 $app->add(new RequestContextMiddleware());
 
 $pdo = PdoFactory::createFromEnv();
+$redis = RedisFactory::createFromEnv();
 $permissionService = new PermissionService($pdo);
 $jwtService = new JwtService();
 $authController = new AuthController($pdo, $jwtService);
@@ -41,15 +43,15 @@ $app->post('/auth/refresh', [$authController, 'refresh']);
 $app->post('/auth/logout', [$authController, 'logout']);
 $app->post('/auth/logout-all', [$authController, 'logoutAll'])->add($authMiddleware);
 
-$app->post('/auth/login', [$authController, 'login'])->add(new RateLimitMiddleware(20, 60));
-$app->post('/auth/register', [$authController, 'register'])->add(new RateLimitMiddleware(10, 60));
+$app->post('/auth/login', [$authController, 'login'])->add(new RateLimitMiddleware($redis, 20, 60));
+$app->post('/auth/register', [$authController, 'register'])->add(new RateLimitMiddleware($redis, 10, 60));
 
 $app->get('/public/notes/{id}', [$noteController, 'publicShow']);
 
-$app->group('', function ($group) use ($noteController, $groupController, $permissionController): void {
+$app->group('', function ($group) use ($noteController, $groupController, $permissionController, $redis): void {
     $group->get('/notes', [$noteController, 'list']);
     $group->get('/notes/{id}', [$noteController, 'show']);
-    $group->post('/notes', [$noteController, 'create'])->add(new RateLimitMiddleware(20, 60));
+    $group->post('/notes', [$noteController, 'create'])->add(new RateLimitMiddleware($redis, 20, 60));
     $group->put('/notes/{id}', [$noteController, 'update']);
     $group->delete('/notes/{id}', [$noteController, 'delete']);
     $group->post('/notes/{id}/attach-to-group', [$noteController, 'attachToGroup']);
