@@ -18,6 +18,7 @@ final class NoteController
     {
         $ownerId = (string)$request->getAttribute('user_id', '');
         $groupId = trim((string)($request->getQueryParams()['group_id'] ?? ''));
+        $tagId = trim((string)($request->getQueryParams()['tag_id'] ?? ''));
         $params = ['owner_id' => $ownerId];
 
         $sql = 'SELECT DISTINCT n.id, n.title, n.description, n.content, n.owner_id, n.created_at, n.updated_at
@@ -25,6 +26,10 @@ final class NoteController
         if ($groupId !== '') {
             $sql .= ' INNER JOIN note_group ng ON ng.note_id = n.id AND ng.group_id = :group_id';
             $params['group_id'] = $groupId;
+        }
+        if ($tagId !== '') {
+            $sql .= ' INNER JOIN note_tag nt ON nt.note_id = n.id AND nt.tag_id = :tag_id';
+            $params['tag_id'] = $tagId;
         }
         $sql .= ' WHERE n.owner_id = :owner_id ORDER BY n.created_at DESC';
 
@@ -232,6 +237,85 @@ final class NoteController
             'group_id' => $groupId,
             'is_copy' => true,
         ]], 201);
+    }
+
+    public function listTags(Request $request, Response $response): Response
+    {
+        $ownerId = (string)$request->getAttribute('user_id', '');
+        $stmt = $this->pdo->prepare(
+            'SELECT DISTINCT t.id, t.name
+             FROM tag t
+             INNER JOIN note_tag nt ON nt.tag_id = t.id
+             INNER JOIN note n ON n.id = nt.note_id
+             WHERE n.owner_id = :owner_id
+             ORDER BY t.name ASC'
+        );
+        $stmt->execute(['owner_id' => $ownerId]);
+
+        return $this->json($response, ['data' => $stmt->fetchAll()]);
+    }
+
+    public function addTag(Request $request, Response $response, array $args): Response
+    {
+        $ownerId = (string)$request->getAttribute('user_id', '');
+        $noteId = (string)($args['id'] ?? '');
+        $payload = (array)$request->getParsedBody();
+        $tagName = trim((string)($payload['name'] ?? ''));
+
+        if ($tagName === '') {
+            return $this->json($response, ['error' => 'Field name is required'], 422);
+        }
+
+        if (!$this->noteExistsForOwner($noteId, $ownerId)) {
+            return $this->json($response, ['error' => 'Note not found'], 404);
+        }
+
+        $tagStmt = $this->pdo->prepare(
+            'INSERT INTO tag (name) VALUES (:name)
+             ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+             RETURNING id, name'
+        );
+        $tagStmt->execute(['name' => $tagName]);
+        $tag = $tagStmt->fetch();
+
+        $linkStmt = $this->pdo->prepare(
+            'INSERT INTO note_tag (note_id, tag_id)
+             VALUES (:note_id, :tag_id)
+             ON CONFLICT (note_id, tag_id) DO NOTHING'
+        );
+        $linkStmt->execute([
+            'note_id' => $noteId,
+            'tag_id' => $tag['id'],
+        ]);
+
+        return $this->json($response, ['data' => [
+            'note_id' => $noteId,
+            'tag_id' => $tag['id'],
+            'name' => $tag['name'],
+        ]], 201);
+    }
+
+    public function removeTag(Request $request, Response $response, array $args): Response
+    {
+        $ownerId = (string)$request->getAttribute('user_id', '');
+        $noteId = (string)($args['id'] ?? '');
+        $tagId = (string)($args['tagId'] ?? '');
+
+        if (!$this->noteExistsForOwner($noteId, $ownerId)) {
+            return $this->json($response, ['error' => 'Note not found'], 404);
+        }
+
+        $stmt = $this->pdo->prepare(
+            'DELETE FROM note_tag
+             WHERE note_id = :note_id
+               AND tag_id = :tag_id'
+        );
+        $stmt->execute([
+            'note_id' => $noteId,
+            'tag_id' => $tagId,
+        ]);
+
+        return $response->withStatus(204);
     }
 
     private function noteExistsForOwner(string $noteId, string $ownerId): bool

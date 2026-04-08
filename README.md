@@ -98,6 +98,11 @@
 - `DELETE /notes/{id}`
 - `POST /notes/{id}/attach-to-group` (`group_id` в body)
 - `POST /notes/{id}/copy-to-group` (`group_id` в body, создает новую заметку-копию)
+- `POST /notes/{id}/tags` (`name` тега в body)
+- `DELETE /notes/{id}/tags/{tagId}`
+
+### Tags
+- `GET /tags` (теги текущего пользователя по его заметкам)
 
 ### Permissions
 - `GET /permissions/target/{type}/{id}`

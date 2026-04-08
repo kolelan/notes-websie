@@ -42,6 +42,9 @@ $app->group('', function ($group) use ($noteController, $groupController): void 
     $group->delete('/notes/{id}', [$noteController, 'delete']);
     $group->post('/notes/{id}/attach-to-group', [$noteController, 'attachToGroup']);
     $group->post('/notes/{id}/copy-to-group', [$noteController, 'copyToGroup']);
+    $group->get('/tags', [$noteController, 'listTags']);
+    $group->post('/notes/{id}/tags', [$noteController, 'addTag']);
+    $group->delete('/notes/{id}/tags/{tagId}', [$noteController, 'removeTag']);
 
     $group->get('/groups', [$groupController, 'list']);
     $group->get('/groups/{id}', [$groupController, 'show']);
