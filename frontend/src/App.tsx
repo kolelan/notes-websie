@@ -11,6 +11,7 @@ import ProfilePage from './pages/ProfilePage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminSettingsPage from './pages/AdminSettingsPage'
 import AdminAuditPage from './pages/AdminAuditPage'
+import AdminClassifiersPage from './pages/AdminClassifiersPage'
 import LegalPage from './pages/LegalPage'
 import './App.css'
 
@@ -66,6 +67,14 @@ export default function App() {
         element={
           <AdminRoute>
             <AdminSettingsPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/classifiers"
+        element={
+          <AdminRoute>
+            <AdminClassifiersPage />
           </AdminRoute>
         }
       />

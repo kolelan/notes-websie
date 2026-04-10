@@ -203,6 +203,7 @@ export default function AdminUsersPage() {
           items={[
             { key: 'users', label: <Link to="/admin/users">Users</Link> },
             { key: 'settings', label: <Link to="/admin/settings">Settings</Link> },
+            { key: 'classifiers', label: <Link to="/admin/classifiers">Classifiers</Link> },
             { key: 'audit', label: <Link to="/admin/audit">Audit</Link> },
             { key: 'dashboard', label: <Link to="/dashboard">Dashboard</Link> },
           ]}

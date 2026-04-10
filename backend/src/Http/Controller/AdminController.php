@@ -214,6 +214,351 @@ final class AdminController
         return $response->withStatus(204);
     }
 
+    public function listClassifiers(Request $request, Response $response): Response
+    {
+        if (!$this->hasKlsSchema()) {
+            return $this->json($response, ['data' => []]);
+        }
+
+        $stmt = $this->pdo->query(
+            'SELECT qual_id, qual_is_del, qual_type_id, qual_namef, qual_names, qual_code, qual_note, qual_vers, tag
+             FROM kls.qual
+             WHERE qual_is_del = FALSE
+             ORDER BY qual_namef ASC'
+        );
+        $rows = $stmt->fetchAll();
+
+        return $this->json($response, ['data' => $rows]);
+    }
+
+    public function createClassifier(Request $request, Response $response): Response
+    {
+        if (!$this->hasKlsSchema()) {
+            return $this->json($response, ['error' => 'KLS schema is not available'], 422);
+        }
+
+        $payload = (array)$request->getParsedBody();
+        $name = trim((string)($payload['qual_namef'] ?? ''));
+        if ($name === '') {
+            return $this->json($response, ['error' => 'Field qual_namef is required'], 422);
+        }
+
+        $shortName = trim((string)($payload['qual_names'] ?? ''));
+        $code = trim((string)($payload['qual_code'] ?? ''));
+        $note = trim((string)($payload['qual_note'] ?? ''));
+        $qualTypeId = (int)($payload['qual_type_id'] ?? 0);
+        if ($qualTypeId <= 0) {
+            $qualTypeId = 1;
+        }
+        $tag = $this->normalizeHstoreInput($payload['tag'] ?? null);
+
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO kls.qual (qual_type_id, qual_namef, qual_names, qual_code, qual_note, tag, qual_is_del, qual_vers)
+             VALUES (:qual_type_id, :qual_namef, :qual_names, :qual_code, :qual_note, :tag, FALSE, 1)
+             RETURNING qual_id'
+        );
+        $stmt->execute([
+            'qual_type_id' => $qualTypeId,
+            'qual_namef' => $name,
+            'qual_names' => $shortName === '' ? null : $shortName,
+            'qual_code' => $code === '' ? null : $code,
+            'qual_note' => $note === '' ? null : $note,
+            'tag' => $tag,
+        ]);
+        $id = (string)$stmt->fetchColumn();
+
+        $this->writeAudit(
+            (string)$request->getAttribute('user_id', ''),
+            'admin.classifier.create',
+            'kls.qual',
+            $id,
+            ['qual_namef' => $name]
+        );
+
+        return $this->json($response, ['data' => ['qual_id' => $id]], 201);
+    }
+
+    public function updateClassifier(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->hasKlsSchema()) {
+            return $this->json($response, ['error' => 'KLS schema is not available'], 422);
+        }
+
+        $id = (string)($args['id'] ?? '');
+        if ($id === '') {
+            return $this->json($response, ['error' => 'Classifier id is required'], 422);
+        }
+
+        $payload = (array)$request->getParsedBody();
+        $fields = [];
+        $params = ['id' => $id];
+
+        if (array_key_exists('qual_namef', $payload)) {
+            $name = trim((string)$payload['qual_namef']);
+            if ($name === '') {
+                return $this->json($response, ['error' => 'Field qual_namef cannot be empty'], 422);
+            }
+            $fields[] = 'qual_namef = :qual_namef';
+            $params['qual_namef'] = $name;
+        }
+        if (array_key_exists('qual_names', $payload)) {
+            $value = trim((string)$payload['qual_names']);
+            $fields[] = 'qual_names = :qual_names';
+            $params['qual_names'] = $value === '' ? null : $value;
+        }
+        if (array_key_exists('qual_code', $payload)) {
+            $value = trim((string)$payload['qual_code']);
+            $fields[] = 'qual_code = :qual_code';
+            $params['qual_code'] = $value === '' ? null : $value;
+        }
+        if (array_key_exists('qual_note', $payload)) {
+            $value = trim((string)$payload['qual_note']);
+            $fields[] = 'qual_note = :qual_note';
+            $params['qual_note'] = $value === '' ? null : $value;
+        }
+        if (array_key_exists('qual_type_id', $payload)) {
+            $typeId = (int)$payload['qual_type_id'];
+            if ($typeId <= 0) {
+                return $this->json($response, ['error' => 'Field qual_type_id is invalid'], 422);
+            }
+            $fields[] = 'qual_type_id = :qual_type_id';
+            $params['qual_type_id'] = $typeId;
+        }
+        if (array_key_exists('tag', $payload)) {
+            $fields[] = 'tag = :tag';
+            $params['tag'] = $this->normalizeHstoreInput($payload['tag']);
+        }
+
+        if ($fields === []) {
+            return $this->json($response, ['error' => 'No fields to update'], 422);
+        }
+
+        $sql = 'UPDATE kls.qual SET ' . implode(', ', $fields) . ', qual_vers = qual_vers + 1 WHERE qual_id = :id AND qual_is_del = FALSE';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        if ($stmt->rowCount() === 0) {
+            return $this->json($response, ['error' => 'Classifier not found or unchanged'], 404);
+        }
+
+        $this->writeAudit(
+            (string)$request->getAttribute('user_id', ''),
+            'admin.classifier.update',
+            'kls.qual',
+            $id,
+            ['fields' => array_keys($payload)]
+        );
+
+        return $this->json($response, ['data' => ['qual_id' => $id]]);
+    }
+
+    public function deleteClassifier(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->hasKlsSchema()) {
+            return $this->json($response, ['error' => 'KLS schema is not available'], 422);
+        }
+
+        $id = (string)($args['id'] ?? '');
+        if ($id === '') {
+            return $this->json($response, ['error' => 'Classifier id is required'], 422);
+        }
+
+        $stmt = $this->pdo->prepare('UPDATE kls.qual SET qual_is_del = TRUE, qual_vers = qual_vers + 1 WHERE qual_id = :id AND qual_is_del = FALSE');
+        $stmt->execute(['id' => $id]);
+        if ($stmt->rowCount() === 0) {
+            return $this->json($response, ['error' => 'Classifier not found'], 404);
+        }
+
+        $this->pdo->prepare('UPDATE kls.kls SET kls_is_del = TRUE, kls_vers = kls_vers + 1 WHERE qual_id = :id AND kls_is_del = FALSE')
+            ->execute(['id' => $id]);
+
+        $this->writeAudit(
+            (string)$request->getAttribute('user_id', ''),
+            'admin.classifier.delete',
+            'kls.qual',
+            $id,
+            []
+        );
+
+        return $response->withStatus(204);
+    }
+
+    public function listClassifierSections(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->hasKlsSchema()) {
+            return $this->json($response, ['data' => []]);
+        }
+
+        $qualId = (string)($args['id'] ?? '');
+        if ($qualId === '') {
+            return $this->json($response, ['error' => 'Classifier id is required'], 422);
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT kls_id, kls_is_del, qual_id, kls_namef, kls_names, kls_note, tags, kls_code, kls_vers,
+                    kls_rubrika::text AS kls_rubrika,
+                    CASE WHEN nlevel(kls_rubrika) > 1 THEN subpath(kls_rubrika, 0, -1)::text ELSE NULL END AS parent_rubrika
+             FROM kls.kls
+             WHERE qual_id = :qual_id AND kls_is_del = FALSE
+             ORDER BY kls_rubrika::text'
+        );
+        $stmt->execute(['qual_id' => $qualId]);
+        return $this->json($response, ['data' => $stmt->fetchAll()]);
+    }
+
+    public function createClassifierSection(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->hasKlsSchema()) {
+            return $this->json($response, ['error' => 'KLS schema is not available'], 422);
+        }
+
+        $qualId = (string)($args['id'] ?? '');
+        if ($qualId === '') {
+            return $this->json($response, ['error' => 'Classifier id is required'], 422);
+        }
+        $payload = (array)$request->getParsedBody();
+        $name = trim((string)($payload['kls_namef'] ?? ''));
+        if ($name === '') {
+            return $this->json($response, ['error' => 'Field kls_namef is required'], 422);
+        }
+        $code = trim((string)($payload['kls_code'] ?? ''));
+        if ($code === '') {
+            return $this->json($response, ['error' => 'Field kls_code is required'], 422);
+        }
+        $parentId = trim((string)($payload['parent_kls_id'] ?? ''));
+
+        $nextIdStmt = $this->pdo->query('SELECT nextval(\'kls.kls_kls_id_seq\'::regclass)');
+        $nextId = (string)$nextIdStmt->fetchColumn();
+        if ($nextId === '') {
+            return $this->json($response, ['error' => 'Failed to allocate kls_id'], 500);
+        }
+
+        $rubrika = $nextId;
+        if ($parentId !== '') {
+            $parentStmt = $this->pdo->prepare('SELECT kls_rubrika::text AS rubrika FROM kls.kls WHERE kls_id = :id AND qual_id = :qual_id AND kls_is_del = FALSE');
+            $parentStmt->execute(['id' => $parentId, 'qual_id' => $qualId]);
+            $parent = $parentStmt->fetch();
+            if (!$parent) {
+                return $this->json($response, ['error' => 'Parent section not found'], 404);
+            }
+            $rubrika = (string)$parent['rubrika'] . '.' . $nextId;
+        }
+
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO kls.kls (kls_id, qual_id, kls_namef, kls_names, kls_note, tags, kls_code, kls_vers, kls_rubrika, kls_is_del)
+             VALUES (:kls_id, :qual_id, :kls_namef, :kls_names, :kls_note, :tags, :kls_code, 1, CAST(:kls_rubrika AS ltree), FALSE)'
+        );
+        $stmt->execute([
+            'kls_id' => $nextId,
+            'qual_id' => $qualId,
+            'kls_namef' => $name,
+            'kls_names' => trim((string)($payload['kls_names'] ?? '')) ?: null,
+            'kls_note' => trim((string)($payload['kls_note'] ?? '')) ?: null,
+            'tags' => $this->normalizeHstoreInput($payload['tags'] ?? null),
+            'kls_code' => $code,
+            'kls_rubrika' => $rubrika,
+        ]);
+
+        $this->writeAudit(
+            (string)$request->getAttribute('user_id', ''),
+            'admin.classifier.section.create',
+            'kls.kls',
+            $nextId,
+            ['qual_id' => $qualId, 'parent_kls_id' => $parentId]
+        );
+
+        return $this->json($response, ['data' => ['kls_id' => $nextId]], 201);
+    }
+
+    public function updateClassifierSection(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->hasKlsSchema()) {
+            return $this->json($response, ['error' => 'KLS schema is not available'], 422);
+        }
+
+        $id = (string)($args['id'] ?? '');
+        if ($id === '') {
+            return $this->json($response, ['error' => 'Section id is required'], 422);
+        }
+        $payload = (array)$request->getParsedBody();
+        $fields = [];
+        $params = ['id' => $id];
+
+        if (array_key_exists('kls_namef', $payload)) {
+            $value = trim((string)$payload['kls_namef']);
+            if ($value === '') return $this->json($response, ['error' => 'Field kls_namef cannot be empty'], 422);
+            $fields[] = 'kls_namef = :kls_namef';
+            $params['kls_namef'] = $value;
+        }
+        if (array_key_exists('kls_names', $payload)) {
+            $value = trim((string)$payload['kls_names']);
+            $fields[] = 'kls_names = :kls_names';
+            $params['kls_names'] = $value === '' ? null : $value;
+        }
+        if (array_key_exists('kls_note', $payload)) {
+            $value = trim((string)$payload['kls_note']);
+            $fields[] = 'kls_note = :kls_note';
+            $params['kls_note'] = $value === '' ? null : $value;
+        }
+        if (array_key_exists('kls_code', $payload)) {
+            $value = trim((string)$payload['kls_code']);
+            if ($value === '') return $this->json($response, ['error' => 'Field kls_code cannot be empty'], 422);
+            $fields[] = 'kls_code = :kls_code';
+            $params['kls_code'] = $value;
+        }
+        if (array_key_exists('tags', $payload)) {
+            $fields[] = 'tags = :tags';
+            $params['tags'] = $this->normalizeHstoreInput($payload['tags']);
+        }
+
+        if ($fields === []) {
+            return $this->json($response, ['error' => 'No fields to update'], 422);
+        }
+
+        $stmt = $this->pdo->prepare('UPDATE kls.kls SET ' . implode(', ', $fields) . ', kls_vers = kls_vers + 1 WHERE kls_id = :id AND kls_is_del = FALSE');
+        $stmt->execute($params);
+        if ($stmt->rowCount() === 0) {
+            return $this->json($response, ['error' => 'Section not found or unchanged'], 404);
+        }
+
+        $this->writeAudit(
+            (string)$request->getAttribute('user_id', ''),
+            'admin.classifier.section.update',
+            'kls.kls',
+            $id,
+            ['fields' => array_keys($payload)]
+        );
+
+        return $this->json($response, ['data' => ['kls_id' => $id]]);
+    }
+
+    public function deleteClassifierSection(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->hasKlsSchema()) {
+            return $this->json($response, ['error' => 'KLS schema is not available'], 422);
+        }
+
+        $id = (string)($args['id'] ?? '');
+        if ($id === '') {
+            return $this->json($response, ['error' => 'Section id is required'], 422);
+        }
+
+        $stmt = $this->pdo->prepare('UPDATE kls.kls SET kls_is_del = TRUE, kls_vers = kls_vers + 1 WHERE kls_id = :id AND kls_is_del = FALSE');
+        $stmt->execute(['id' => $id]);
+        if ($stmt->rowCount() === 0) {
+            return $this->json($response, ['error' => 'Section not found'], 404);
+        }
+
+        $this->writeAudit(
+            (string)$request->getAttribute('user_id', ''),
+            'admin.classifier.section.delete',
+            'kls.kls',
+            $id,
+            []
+        );
+
+        return $response->withStatus(204);
+    }
+
     public function listSettings(Request $request, Response $response): Response
     {
         $stmt = $this->pdo->query('SELECT key, value, updated_by, updated_at FROM system_setting ORDER BY key ASC');
@@ -379,5 +724,33 @@ final class AdminController
         return in_array($key, self::ALLOWED_SETTING_KEYS, true)
             || str_starts_with($key, 'feature.')
             || str_starts_with($key, 'integration.');
+    }
+
+    private function hasKlsSchema(): bool
+    {
+        $stmt = $this->pdo->query('SELECT to_regclass(\'kls.qual\') IS NOT NULL AS has_qual, to_regclass(\'kls.kls\') IS NOT NULL AS has_kls');
+        $row = $stmt->fetch();
+        return (bool)($row['has_qual'] ?? false) && (bool)($row['has_kls'] ?? false);
+    }
+
+    private function normalizeHstoreInput(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            return $trimmed === '' ? null : $trimmed;
+        }
+        if (is_array($value)) {
+            $pairs = [];
+            foreach ($value as $key => $item) {
+                $k = str_replace('"', '\"', (string)$key);
+                $v = str_replace('"', '\"', (string)$item);
+                $pairs[] = '"' . $k . '"=>"' . $v . '"';
+            }
+            return $pairs === [] ? null : implode(',', $pairs);
+        }
+        return null;
     }
 }

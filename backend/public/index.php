@@ -122,6 +122,14 @@ $app->group('/admin', function ($group) use ($adminController): void {
     $group->patch('/users/{id}', [$adminController, 'updateUser']);
     $group->post('/users/{id}/logout-all', [$adminController, 'revokeUserSessions']);
     $group->delete('/users/{id}', [$adminController, 'deleteUser']);
+    $group->get('/classifiers', [$adminController, 'listClassifiers']);
+    $group->post('/classifiers', [$adminController, 'createClassifier']);
+    $group->patch('/classifiers/{id}', [$adminController, 'updateClassifier']);
+    $group->delete('/classifiers/{id}', [$adminController, 'deleteClassifier']);
+    $group->get('/classifiers/{id}/sections', [$adminController, 'listClassifierSections']);
+    $group->post('/classifiers/{id}/sections', [$adminController, 'createClassifierSection']);
+    $group->patch('/classifier-sections/{id}', [$adminController, 'updateClassifierSection']);
+    $group->delete('/classifier-sections/{id}', [$adminController, 'deleteClassifierSection']);
     $group->get('/settings', [$adminController, 'listSettings']);
     $group->put('/settings/{key}', [$adminController, 'upsertSetting']);
     $group->get('/audit', [$adminController, 'listAudit']);
