@@ -50,6 +50,7 @@ final class AuthController
         $email = trim((string)($payload['email'] ?? ''));
         $name = trim((string)($payload['name'] ?? ''));
         $password = (string)($payload['password'] ?? '');
+        $termsAccepted = (bool)($payload['terms_accepted'] ?? false);
 
         if ($email === '' || $name === '' || $password === '') {
             return $this->json($response, ['error' => 'Fields email, name and password are required'], 422);
@@ -59,6 +60,9 @@ final class AuthController
         }
         if (mb_strlen($password) < 8) {
             return $this->json($response, ['error' => 'Password must be at least 8 characters'], 422);
+        }
+        if (!$termsAccepted) {
+            return $this->json($response, ['error' => 'Terms acceptance is required'], 422);
         }
 
         $passwordHash = password_hash($password, PASSWORD_BCRYPT);

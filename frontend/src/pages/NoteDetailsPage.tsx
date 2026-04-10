@@ -4,7 +4,8 @@ import axios from 'axios'
 import { Tree } from 'antd'
 import type { TreeDataNode } from 'antd'
 import { api, setAuthToken } from '../lib/api'
-import { readSession } from '../lib/auth'
+import { readSession, writeSession } from '../lib/auth'
+import { parseJwt } from '../lib/jwt'
 import type { ApiEnvelope, Group, Note } from '../types/api'
 
 function getJwtSubject(token: string): string | null {
@@ -26,6 +27,7 @@ export default function NoteDetailsPage() {
   const [note, setNote] = useState<Note | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [canOpenAdmin, setCanOpenAdmin] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [content, setContent] = useState('')
@@ -63,6 +65,8 @@ export default function NoteDetailsPage() {
     const accessToken = session?.accessToken ?? null
     setIsAuthenticated(Boolean(session))
     setCurrentUserId(accessToken ? getJwtSubject(accessToken) : null)
+    const role = accessToken ? (parseJwt(accessToken)?.role ?? 'user') : 'user'
+    setCanOpenAdmin(['admin', 'superadmin'].includes(role))
 
     async function loadNote() {
       setLoading(true)
@@ -112,6 +116,21 @@ export default function NoteDetailsPage() {
 
     void loadNote()
   }, [noteId, navigate])
+
+  async function onLogout() {
+    const session = readSession()
+    if (session) {
+      setAuthToken(session.accessToken)
+      try {
+        await api.post('/auth/logout', { refresh_token: session.refreshToken })
+      } catch {
+        // ignore logout API errors, local logout still required
+      }
+    }
+    writeSession(null)
+    setAuthToken(null)
+    navigate('/')
+  }
 
   async function saveNote() {
     if (!noteId) return
@@ -276,7 +295,29 @@ export default function NoteDetailsPage() {
     <main className="page">
       <header className="row">
         <h1>Заметка</h1>
-        <Link to={isAuthenticated ? '/dashboard' : '/'}>{isAuthenticated ? 'Назад в dashboard' : 'Ко входу'}</Link>
+        {isAuthenticated ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+            <button type="button">
+              <Link to="/">Главная</Link>
+            </button>
+            <button type="button">
+              <Link to="/dashboard">Dashboard</Link>
+            </button>
+            <button type="button">
+              <Link to="/profile">Профиль</Link>
+            </button>
+            {canOpenAdmin && (
+              <button type="button">
+                <Link to="/admin/users">Настройки</Link>
+              </button>
+            )}
+            <button type="button" onClick={onLogout}>Выйти</button>
+          </div>
+        ) : (
+          <button type="button">
+            <Link to="/">Главная</Link>
+          </button>
+        )}
       </header>
 
       {message && <p>{message}</p>}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Menu, Table } from 'antd'
+import { Button, Menu, Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { api, setAuthToken } from '../lib/api'
 import { readSession } from '../lib/auth'
@@ -28,6 +28,7 @@ type UsersResponse = {
 export default function AdminUsersPage() {
   const navigate = useNavigate()
   const [users, setUsers] = useState<AdminUser[]>([])
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
   const [q, setQ] = useState('')
   const [roleFilter, setRoleFilter] = useState<'all' | AdminUser['role']>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'blocked'>('all')
@@ -57,6 +58,7 @@ export default function AdminUsersPage() {
       params.limit = String(pageSize)
       const res = await api.get<UsersResponse>('/admin/users', { params })
       setUsers(res.data.data)
+      setSelectedUserIds([])
       setPage(res.data.meta?.page ?? targetPage)
       setPages(res.data.meta?.pages ?? 1)
       setTotal(res.data.meta?.total ?? res.data.data.length)
@@ -111,6 +113,45 @@ export default function AdminUsersPage() {
       ok('Все сессии пользователя завершены')
     } catch {
       fail('Не удалось завершить сессии пользователя.')
+    } finally {
+      setSavingAction('')
+    }
+  }
+
+  async function bulkLogoutAll(userIds: string[]) {
+    if (userIds.length === 0) {
+      fail('Выберите пользователей для отзыва сессий.')
+      return
+    }
+    if (!window.confirm(`Принудительно завершить все сессии у ${userIds.length} пользователей?`)) return
+    setSavingAction('logout:bulk')
+    clear()
+    try {
+      await Promise.all(userIds.map((id) => api.post(`/admin/users/${id}/logout-all`)))
+      ok('Все сессии выбранных пользователей завершены')
+    } catch {
+      fail('Не удалось завершить сессии выбранных пользователей.')
+    } finally {
+      setSavingAction('')
+    }
+  }
+
+  async function deleteUsers(userIds: string[]) {
+    if (userIds.length === 0) {
+      fail('Выберите пользователей для удаления.')
+      return
+    }
+    if (!window.confirm(`Удалить выбранных пользователей: ${userIds.length}? Это действие необратимо и удалит связанные данные (заметки, группы, токены).`)) {
+      return
+    }
+    setSavingAction('delete:bulk')
+    clear()
+    try {
+      await Promise.all(userIds.map((id) => api.delete(`/admin/users/${id}`)))
+      ok('Пользователи удалены')
+      await loadUsers(1)
+    } catch {
+      fail('Не удалось удалить пользователей. Удаление доступно только superadmin.')
     } finally {
       setSavingAction('')
     }
@@ -192,7 +233,26 @@ export default function AdminUsersPage() {
           </label>
         </div>
         <div className="row">
-          <button onClick={() => void loadUsers(1)}>Применить</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => void loadUsers(1)}>Применить</button>
+            <Button
+              type="default"
+              disabled={savingAction !== '' || selectedUserIds.length === 0}
+              onClick={() => void bulkLogoutAll(selectedUserIds)}
+              title="Принудительно завершить все сессии выбранных пользователей"
+            >
+              Logout all ({selectedUserIds.length})
+            </Button>
+            <Button
+              danger
+              type="default"
+              disabled={savingAction !== '' || selectedUserIds.length === 0}
+              onClick={() => void deleteUsers(selectedUserIds)}
+              title="Удалить выбранных пользователей (только superadmin)"
+            >
+              Удалить выбранных ({selectedUserIds.length})
+            </Button>
+          </div>
           <p>Найдено: {total}</p>
         </div>
       </section>
@@ -208,6 +268,11 @@ export default function AdminUsersPage() {
             columns={columns}
             pagination={false}
             size="middle"
+            rowSelection={{
+              selectedRowKeys: selectedUserIds,
+              onChange: (keys) => setSelectedUserIds(keys.map(String)),
+              getCheckboxProps: () => ({ disabled: savingAction !== '' }),
+            }}
           />
         </section>
       )}

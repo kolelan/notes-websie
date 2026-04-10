@@ -11,6 +11,7 @@ import ProfilePage from './pages/ProfilePage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminSettingsPage from './pages/AdminSettingsPage'
 import AdminAuditPage from './pages/AdminAuditPage'
+import LegalPage from './pages/LegalPage'
 import './App.css'
 
 function PrivateRoute({ children }: { children: ReactElement }) {
@@ -31,6 +32,7 @@ export default function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/legal" element={<LegalPage />} />
       <Route
         path="/dashboard"
         element={

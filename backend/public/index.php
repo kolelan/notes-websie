@@ -121,6 +121,7 @@ $app->group('/admin', function ($group) use ($adminController): void {
     $group->get('/users', [$adminController, 'listUsers']);
     $group->patch('/users/{id}', [$adminController, 'updateUser']);
     $group->post('/users/{id}/logout-all', [$adminController, 'revokeUserSessions']);
+    $group->delete('/users/{id}', [$adminController, 'deleteUser']);
     $group->get('/settings', [$adminController, 'listSettings']);
     $group->put('/settings/{key}', [$adminController, 'upsertSetting']);
     $group->get('/audit', [$adminController, 'listAudit']);

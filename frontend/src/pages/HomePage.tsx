@@ -298,6 +298,7 @@ export default function HomePage() {
             current={page}
             total={total}
             pageSize={pageSize}
+            locale={{ items_per_page: '' }}
             onChange={(p, size) => {
               if (size !== pageSize) {
                 setPageSize(size)

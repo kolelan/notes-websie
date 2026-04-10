@@ -124,6 +124,7 @@ export default function AdminAuditPage() {
           current={page}
           total={total}
           pageSize={50}
+          locale={{ items_per_page: '' }}
           onChange={(p) => void loadAudit(p)}
           showSizeChanger={false}
         />

@@ -157,6 +157,63 @@ final class AdminController
         return $this->json($response, ['data' => ['id' => $targetUserId, 'revoked' => $stmt->rowCount()]]);
     }
 
+    public function deleteUser(Request $request, Response $response, array $args): Response
+    {
+        $actorRole = (string)$request->getAttribute('user_role', '');
+        if ($actorRole !== 'superadmin') {
+            return $this->json($response, ['error' => 'Superadmin access required'], 403);
+        }
+
+        $actorUserId = (string)$request->getAttribute('user_id', '');
+        $targetUserId = (string)($args['id'] ?? '');
+        if ($targetUserId === '') {
+            return $this->json($response, ['error' => 'User id is required'], 422);
+        }
+        if ($actorUserId !== '' && $targetUserId === $actorUserId) {
+            return $this->json($response, ['error' => 'You cannot delete yourself'], 422);
+        }
+
+        $userStmt = $this->pdo->prepare('SELECT id, email, role, is_active FROM "user" WHERE id = :id LIMIT 1');
+        $userStmt->execute(['id' => $targetUserId]);
+        $user = $userStmt->fetch();
+        if (!$user) {
+            return $this->json($response, ['error' => 'User not found'], 404);
+        }
+
+        if ((string)$user['role'] === 'superadmin' && (bool)$user['is_active']) {
+            $countStmt = $this->pdo->query('SELECT COUNT(*) FROM "user" WHERE role = \'superadmin\' AND is_active = TRUE');
+            $superadmins = (int)$countStmt->fetchColumn();
+            if ($superadmins <= 1) {
+                return $this->json($response, ['error' => 'Cannot delete last active superadmin'], 422);
+            }
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $delStmt = $this->pdo->prepare('DELETE FROM "user" WHERE id = :id');
+            $delStmt->execute(['id' => $targetUserId]);
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            return $this->json($response, ['error' => 'Failed to delete user'], 500);
+        }
+
+        $this->writeAudit(
+            $actorUserId,
+            'admin.user.delete',
+            'user',
+            $targetUserId,
+            [
+                'mode' => 'hard',
+                'email' => (string)$user['email'],
+                'role' => (string)$user['role'],
+                'was_active' => (bool)$user['is_active'],
+            ]
+        );
+
+        return $response->withStatus(204);
+    }
+
     public function listSettings(Request $request, Response $response): Response
     {
         $stmt = $this->pdo->query('SELECT key, value, updated_by, updated_at FROM system_setting ORDER BY key ASC');
