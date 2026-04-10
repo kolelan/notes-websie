@@ -97,5 +97,6 @@ vendor/bin/phinx rollback -e production
 
 - Начальная схема: `backend/database/migrations/20260407143000_init_schema.php`
 - Роли/пароль пользователя: `backend/database/migrations/20260407144500_add_user_role_and_password.php`
+- Теги hstore для KLS: `backend/database/migrations/20260409120000_add_kls_hstore_tags.php`
 - Создание superadmin после миграций:
   - `composer superadmin:create`
