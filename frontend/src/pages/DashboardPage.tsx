@@ -8,6 +8,7 @@ import { api, setAuthToken } from '../lib/api'
 import { readSession, writeSession } from '../lib/auth'
 import { parseJwt } from '../lib/jwt'
 import type { ApiEnvelope, DashboardNote, Group, Note } from '../types/api'
+import DynamicMenu from '../components/DynamicMenu'
 
 function flattenGroups(groups: Group[], level = 0): Array<{ id: string; name: string; level: number }> {
   const result: Array<{ id: string; name: string; level: number }> = []
@@ -520,19 +521,11 @@ export default function DashboardPage() {
     <main className="page">
       <header className="row">
         <h1>Dashboard</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-          <button type="button">
-            <Link to="/dashboard">Dashboard</Link>
-          </button>
-          <button type="button">
-            <Link to="/profile">Профиль</Link>
-          </button>
+        <div className="header-menu-right">
+          <DynamicMenu code="MENU_DASHBOARD" onLogout={onLogout} />
           {canOpenAdmin && (
-            <button type="button">
-              <Link to="/admin/users">Настройки</Link>
-            </button>
+            <DynamicMenu code="MENU_ADMIN" />
           )}
-          <button type="button" onClick={onLogout}>Выйти</button>
         </div>
       </header>
 

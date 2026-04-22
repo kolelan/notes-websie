@@ -1,7 +1,13 @@
 .page {
-  max-width: 980px;
+  width: 90%;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 24px;
+}
+
+.page.page-register {
+  width: 100%;
+  max-width: 980px;
 }
 
 .card {
@@ -307,7 +313,53 @@ li.selected {
   margin-top: 16px;
 }
 
+.dynamic-menu-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.dynamic-menu-scroll .ant-menu-horizontal {
+  display: flex;
+  flex-wrap: nowrap;
+  min-width: max-content;
+}
+
+.header-menu-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (min-width: 1200px) {
+  .header-menu-right {
+    flex: 1;
+  }
+}
+
+/* Compact Ant Table sorter controls globally */
+.ant-table-column-sorters .ant-table-column-sorter {
+  width: 15px;
+  min-width: 15px;
+  flex: 0 0 15px;
+}
+
+.ant-table-column-sorter-inner {
+  width: 15px;
+}
+
+.ant-table-column-sorters {
+  gap: 4px;
+}
+
 @media (max-width: 800px) {
+  .page {
+    width: 100%;
+    max-width: 980px;
+  }
+
   .grid {
     grid-template-columns: 1fr;
   }

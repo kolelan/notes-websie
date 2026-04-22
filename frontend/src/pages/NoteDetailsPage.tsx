@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import axios from 'axios'
 import { Tree } from 'antd'
 import type { TreeDataNode } from 'antd'
@@ -7,6 +7,7 @@ import { api, setAuthToken } from '../lib/api'
 import { readSession, writeSession } from '../lib/auth'
 import { parseJwt } from '../lib/jwt'
 import type { ApiEnvelope, Group, Note } from '../types/api'
+import DynamicMenu from '../components/DynamicMenu'
 
 function getJwtSubject(token: string): string | null {
   try {
@@ -295,29 +296,18 @@ export default function NoteDetailsPage() {
     <main className="page">
       <header className="row">
         <h1>Заметка</h1>
-        {isAuthenticated ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-            <button type="button">
-              <Link to="/">Главная</Link>
-            </button>
-            <button type="button">
-              <Link to="/dashboard">Dashboard</Link>
-            </button>
-            <button type="button">
-              <Link to="/profile">Профиль</Link>
-            </button>
-            {canOpenAdmin && (
-              <button type="button">
-                <Link to="/admin/users">Настройки</Link>
-              </button>
-            )}
-            <button type="button" onClick={onLogout}>Выйти</button>
-          </div>
-        ) : (
-          <button type="button">
-            <Link to="/">Главная</Link>
-          </button>
-        )}
+        <div className="header-menu-right">
+          {isAuthenticated ? (
+            <>
+              <DynamicMenu code="MENU_DASHBOARD" onLogout={onLogout} />
+              {canOpenAdmin && (
+                <DynamicMenu code="MENU_ADMIN" />
+              )}
+            </>
+          ) : (
+            <DynamicMenu code="MENU_MAIN" />
+          )}
+        </div>
       </header>
 
       {message && <p>{message}</p>}

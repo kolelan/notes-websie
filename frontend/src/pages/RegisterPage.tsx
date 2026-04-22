@@ -53,7 +53,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="page">
+    <main className="page page-register">
       <h1>Регистрация</h1>
       <form onSubmit={onSubmit}>
         <Card className="card">

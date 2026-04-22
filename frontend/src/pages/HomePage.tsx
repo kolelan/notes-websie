@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Alert, Button, Card, Input, Menu, Pagination, Select, Table } from 'antd'
+import { Alert, Button, Card, Input, Pagination, Select, Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { api, setAuthToken } from '../lib/api'
 import { readSession, writeSession } from '../lib/auth'
 import type { ApiEnvelope } from '../types/api'
+import DynamicMenu from '../components/DynamicMenu'
 
 type PublicNote = {
   id: string
@@ -153,29 +154,13 @@ export default function HomePage() {
           <h1>Notes Website</h1>
           <p className="muted">Ваши заметки, группы и совместная работа</p>
         </div>
-        {hasSession ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-            <Button type="default">
-              <Link to="/dashboard">Dashboard</Link>
-            </Button>
-            <Button type="default">
-              <Link to="/profile">Профиль</Link>
-            </Button>
-            <Button type="default" onClick={() => void onLogout()}>
-              Выйти
-            </Button>
-          </div>
-        ) : (
-          <Menu
-            mode="horizontal"
-            selectable={false}
-            items={[
-              { key: 'login', label: <Link to="/login">Войти</Link> },
-              { key: 'register', label: <Link to="/register">Регистрация</Link> },
-              { key: 'profile', label: <Link to="/profile">Профиль</Link> },
-            ]}
-          />
-        )}
+        <div className="header-menu-right">
+          {hasSession ? (
+            <DynamicMenu code="MENU_DASHBOARD" onLogout={onLogout} />
+          ) : (
+            <DynamicMenu code="MENU_MAIN" />
+          )}
+        </div>
       </header>
 
       <section className="card hero">

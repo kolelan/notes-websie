@@ -12,6 +12,11 @@ import AdminUsersPage from './pages/AdminUsersPage'
 import AdminSettingsPage from './pages/AdminSettingsPage'
 import AdminAuditPage from './pages/AdminAuditPage'
 import AdminClassifiersPage from './pages/AdminClassifiersPage'
+import AdminClassifierCreatePage from './pages/AdminClassifierCreatePage'
+import AdminClassifierItemsPage from './pages/AdminClassifierItemsPage'
+import AdminClassifierItemCreatePage from './pages/AdminClassifierItemCreatePage'
+import AdminClassifierEditPage from './pages/AdminClassifierEditPage'
+import AdminClassifierItemEditPage from './pages/AdminClassifierItemEditPage'
 import LegalPage from './pages/LegalPage'
 import './App.css'
 
@@ -75,6 +80,46 @@ export default function App() {
         element={
           <AdminRoute>
             <AdminClassifiersPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/classifiers/new"
+        element={
+          <AdminRoute>
+            <AdminClassifierCreatePage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/classifiers/:id/edit"
+        element={
+          <AdminRoute>
+            <AdminClassifierEditPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/classifier-items"
+        element={
+          <AdminRoute>
+            <AdminClassifierItemsPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/classifier-items/new"
+        element={
+          <AdminRoute>
+            <AdminClassifierItemCreatePage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/classifier-items/:id/edit"
+        element={
+          <AdminRoute>
+            <AdminClassifierItemEditPage />
           </AdminRoute>
         }
       />

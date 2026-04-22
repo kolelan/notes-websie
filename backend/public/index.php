@@ -8,10 +8,12 @@ use App\Acl\PermissionService;
 use App\Cache\RedisFactory;
 use App\Http\Controller\AuthController;
 use App\Http\Controller\AdminController;
+use App\Http\Controller\AdminClassifierController;
 use App\Http\Controller\GroupController;
 use App\Http\Controller\NoteController;
 use App\Http\Controller\PermissionController;
 use App\Http\Controller\ProfileController;
+use App\Http\Controller\MenuController;
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\AuthMiddleware;
 use App\Http\Middleware\RateLimitMiddleware;
@@ -51,7 +53,7 @@ $app->add(function (Request $request, $handler) use ($corsAllowedOrigins): Respo
 
     return $response
         ->withHeader('Vary', 'Origin')
-        ->withHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+        ->withHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
         ->withHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-Id')
         ->withHeader('Access-Control-Allow-Credentials', 'true');
 });
@@ -62,10 +64,12 @@ $permissionService = new PermissionService($pdo);
 $jwtService = new JwtService();
 $authController = new AuthController($pdo, $jwtService);
 $adminController = new AdminController($pdo);
+$adminClassifierController = new AdminClassifierController($pdo);
 $noteController = new NoteController($pdo, $permissionService);
 $groupController = new GroupController($pdo, $permissionService);
 $permissionController = new PermissionController($pdo, $permissionService);
 $profileController = new ProfileController($pdo);
+$menuController = new MenuController($pdo, $jwtService);
 $authMiddleware = new AuthMiddleware($jwtService);
 $adminMiddleware = new AdminMiddleware();
 
@@ -86,6 +90,7 @@ $app->get('/public/notes', [$noteController, 'publicList']);
 $app->get('/public/notes/filters/authors', [$noteController, 'publicFilterAuthors']);
 $app->get('/public/notes/filters/tags', [$noteController, 'publicFilterTags']);
 $app->get('/public/notes/filters/groups', [$noteController, 'publicFilterGroups']);
+$app->get('/menu/{code}', [$menuController, 'getByCode']);
 
 $app->group('', function ($group) use ($noteController, $groupController, $permissionController, $profileController, $redis): void {
     $group->get('/notes', [$noteController, 'list']);
@@ -122,17 +127,25 @@ $app->group('/admin', function ($group) use ($adminController): void {
     $group->patch('/users/{id}', [$adminController, 'updateUser']);
     $group->post('/users/{id}/logout-all', [$adminController, 'revokeUserSessions']);
     $group->delete('/users/{id}', [$adminController, 'deleteUser']);
-    $group->get('/classifiers', [$adminController, 'listClassifiers']);
-    $group->post('/classifiers', [$adminController, 'createClassifier']);
-    $group->patch('/classifiers/{id}', [$adminController, 'updateClassifier']);
-    $group->delete('/classifiers/{id}', [$adminController, 'deleteClassifier']);
-    $group->get('/classifiers/{id}/sections', [$adminController, 'listClassifierSections']);
-    $group->post('/classifiers/{id}/sections', [$adminController, 'createClassifierSection']);
-    $group->patch('/classifier-sections/{id}', [$adminController, 'updateClassifierSection']);
-    $group->delete('/classifier-sections/{id}', [$adminController, 'deleteClassifierSection']);
     $group->get('/settings', [$adminController, 'listSettings']);
     $group->put('/settings/{key}', [$adminController, 'upsertSetting']);
     $group->get('/audit', [$adminController, 'listAudit']);
+})->add($adminMiddleware)->add($authMiddleware);
+
+$app->group('/admin', function ($group) use ($adminClassifierController): void {
+    $group->get('/classifiers', [$adminClassifierController, 'listClassifiers']);
+    $group->post('/classifiers', [$adminClassifierController, 'createClassifier']);
+    $group->patch('/classifiers/{id}', [$adminClassifierController, 'updateClassifier']);
+    $group->delete('/classifiers/{id}', [$adminClassifierController, 'deleteClassifier']);
+    $group->post('/classifiers/{id}/copy', [$adminClassifierController, 'copyClassifier']);
+    $group->post('/classifiers/bulk', [$adminClassifierController, 'bulkClassifierAction']);
+
+    $group->get('/classifier-items', [$adminClassifierController, 'listClassifierItems']);
+    $group->post('/classifier-items', [$adminClassifierController, 'createClassifierItem']);
+    $group->patch('/classifier-items/{id}', [$adminClassifierController, 'updateClassifierItem']);
+    $group->delete('/classifier-items/{id}', [$adminClassifierController, 'deleteClassifierItem']);
+    $group->post('/classifier-items/{id}/copy', [$adminClassifierController, 'copyClassifierItem']);
+    $group->post('/classifier-items/bulk', [$adminClassifierController, 'bulkClassifierItemAction']);
 })->add($adminMiddleware)->add($authMiddleware);
 
 $app->run();
